@@ -1,0 +1,3 @@
+-r requirements.txt
+open3d-cpu==0.20.0
+xatlas==0.0.11

@@ -2,11 +2,12 @@
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f0eee7"><title>臥室全景 · Redwood Bedroom</title><link rel="stylesheet" href="./style.css"></head>
 <body><main>
-<header><div><p class="kicker">Redwood / Bedroom</p><h1>臥室空間重建</h1></div><a class="download" id="download" href="./bedroom-layout.glb" download>下載格局 GLB ↓</a></header>
+<header><div><p class="kicker">Redwood / Bedroom</p><h1>臥室空間重建</h1></div><a class="download" id="download" href="./bedroom-full.glb" download>下載全室 GLB ↓</a></header>
 <div class="workspace"><section class="stage" aria-label="臥室三維視窗"><canvas id="view" tabindex="0" aria-label="拖曳旋轉視角，滾輪或雙指縮放"></canvas><img id="reference" alt="目前位置的原始相機照片" hidden>
-<nav aria-label="觀察模式"><button id="overview" aria-pressed="true">全室剖視</button><button id="plan" aria-pressed="false">平面俯視</button><button id="inside" aria-pressed="false">室內近看</button></nav>
+<nav aria-label="觀察模式"><button id="overview" aria-pressed="true">全室剖視</button><button id="plan" aria-pressed="false">平面俯視</button><button id="walk" aria-pressed="false">全室漫遊</button><button id="inside" aria-pressed="false">室內近看</button></nav>
+<div id="walk-pad" hidden aria-label="移動方向"><button data-move="forward" aria-label="前進">↑</button><button data-move="left" aria-label="向左移動">←</button><button data-move="back" aria-label="後退">↓</button><button data-move="right" aria-label="向右移動">→</button></div>
 <div class="legend"><span id="state" role="status">載入臥室模型中…</span><span id="fps"></span></div></section>
 <aside><label class="method">顯示方式<select id="method"></select></label><h2>拍攝位置</h2><div id="stations"></div><div class="tools"><button id="compare" hidden>對照原始照片</button><button id="test">測試幀率</button></div>
 <p id="note" aria-live="polite">拖曳可環繞整間臥室，滾輪或雙指可縮放。</p></aside></div>
-<footer><span>格局模型依實拍與掃描描繪，家具造型與材質為近似。</span><a href="./view-comparison.jpg">同視角實拍比較 ↗</a><a href="https://www.redwood-data.org/indoor_lidar_rgbd/">Redwood 資料來源 ↗</a></footer>
+<footer><span>全室表面融合實拍影像。天花板、窗簾上緣與遮蔽處依鄰近資料補全。</span><a href="./full-room-comparison.jpg">全室模型與原照比較 ↗</a><a href="https://www.redwood-data.org/indoor_lidar_rgbd/">Redwood 資料來源 ↗</a></footer>
 </main><script type="module" src="./viewer.js"></script></body></html>

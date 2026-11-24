@@ -1,16 +1,19 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomWalk } from './walk.js';
 import { loadSplats, loadSplatLayers, localCamera } from './local-splats.js';
 
 const el=id=>document.getElementById(id);
 const canvas=el('view');
 const V=(x,y,z)=>new THREE.Vector3(x,y,z);
 const home=V(.48,.64,-.12), orbit=V(5,5.6,-7.2);
-const modes=['overview','plan','inside'];
-const names={overview:'全室剖視',plan:'平面俯視',inside:'室內近看'};
-const labels={layout:'格局模型',scan:'原始掃描網格',splat:'實景高斯視差',live:'逐點高斯潑濺'};
+const modes=['overview','plan','walk','inside'];
+const names={overview:'全室剖視',plan:'平面俯視',walk:'全室漫遊',inside:'室內近看'};
+const labels={full:'全室實拍模型',layout:'格局模型',scan:'原始掃描網格',splat:'實景高斯視差',live:'逐點高斯潑濺'};
 const descriptions={
+  full:'同一個完整三維模型。拖曳環繞、滾輪縮放，或進入全室漫遊。',
+  walk:'拖曳轉頭，使用 WASD、方向鍵或畫面箭頭移動。',
   layout:'依掃描位置重畫床、書桌與家具。拖曳環繞，滾輪或雙指縮放。',
   scan:'由彩色影像與深度掃描重建。格局與原始細節可在「顯示方式」切換比較。',
   splat:'拖曳或按方向鍵可左右、上下小幅移動，觀察前後景視差。雙擊回到拍攝中心。'
@@ -43,10 +46,13 @@ async function run(){
   const response=await fetch('./scene.json');if(!response.ok)throw Error('場景說明下載失敗');
   const data=await response.json(),cache=new Map(),loader=new GLTFLoader();
   const stationButtons=[];
-  let mode='overview',station=0,overviewMethod='layout',insideMethod='splat';
+  let mode='overview',station=0,overviewMethod='full',insideMethod='splat';
   let active=null,dirty=true,comparing=false,bench=null,generation=0,dx=0,dy=0,pointer=null;
   let loaded=false,lastWidth=0,lastHeight=0;
-  const method=()=>mode==='inside'?insideMethod:overviewMethod;
+  const method=()=>mode==='walk'?'full':mode==='inside'?insideMethod:overviewMethod;
+  const gridResponse=await fetch('./walk-grid.json');
+  if(!gridResponse.ok)throw Error('無法載入房間動線');
+  const walk=new RoomWalk(camera,await gridResponse.json(),canvas,el('walk-pad'),()=>{dirty=true;});
   const isLocal=()=>['splat','live'].includes(method());
   controls.addEventListener('change',()=>{dirty=true;});
 
@@ -54,7 +60,7 @@ async function run(){
     if(!cache.has(key)){
       const promise=key.startsWith('splat-')?loadSplatLayers(Number(key.slice(6))):
         key.startsWith('live-')?loadSplats(Number(key.slice(5))):
-        loader.loadAsync(key==='layout'?'./bedroom-layout.glb':'./bedroom.glb').then(a=>a.scene);
+        loader.loadAsync(key==='full'?'./bedroom-full.glb':key==='layout'?'./bedroom-layout.glb':'./bedroom.glb').then(a=>a.scene);
       cache.set(key,promise);
       promise.catch(()=>cache.delete(key));
     }
@@ -62,6 +68,7 @@ async function run(){
   }
   function distance(){return orbit.length()*Math.max(1,1.40/Math.max(.5,camera.aspect));}
   function resetCamera(){
+    if(mode==='walk'){controls.enabled=false;walk.enter();return;}
     controls.enableDamping=false;controls.update();controls.enableDamping=true;
     dx=dy=0;camera.fov=mode==='inside'?49.13:41;camera.updateProjectionMatrix();
     const interior=mode==='inside';
@@ -92,18 +99,20 @@ async function run(){
     for(const m of modes)el(m).setAttribute('aria-pressed',String(m===mode));
     stationButtons.forEach((btn,i)=>btn.setAttribute('aria-pressed',String(mode==='inside'&&station===i)));
     el('method').replaceChildren();
-    for(const opt of (mode==='inside'?['splat','live','scan']:['layout','scan'])){
+    for(const opt of (mode==='walk'?['full']:mode==='inside'?['splat','live','scan']:['full','scan','layout'])){
       el('method').add(new Option(labels[opt],opt));
     }
-    el('method').value=method();el('compare').hidden=mode!=='inside';
-    const layout=method()==='layout';
-    el('download').href=layout?'./bedroom-layout.glb':'./bedroom.glb';
-    el('download').textContent=layout?'下載格局 GLB ↓':'下載掃描 GLB ↓';
-    el('note').textContent=descriptions[method()==='live'?'splat':method()];
+    el('method').value=method();el('method').disabled=mode==='walk';el('compare').hidden=mode!=='inside';
+    const layout=method()==='layout',full=method()==='full';
+    el('download').href=full?'./bedroom-full.glb':layout?'./bedroom-layout.glb':'./bedroom.glb';
+    el('download').textContent=full?'下載全室 GLB ↓':layout?'下載格局 GLB ↓':'下載掃描 GLB ↓';
+    canvas.setAttribute('aria-label',mode==='walk'?'拖曳轉頭，WASD 或方向鍵移動':isLocal()?'拖曳或用方向鍵移動視角':'拖曳環繞整間臥室，滾輪或雙指縮放');
+    el('note').textContent=descriptions[mode==='walk'?'walk':method()==='live'?'splat':method()];
   }
   async function select(next,index=station){
     const ticket=++generation;
-    mode=next;station=index;loaded=false;pointer=null;
+    if(bench)finish('');
+    mode=next;station=index;loaded=false;pointer=null;walk.setEnabled(false);
     showPhoto(false);updateLabels();resetCamera();
     el('state').textContent='載入中…';el('test').disabled=true;
     try{
@@ -126,12 +135,13 @@ async function run(){
           });
           renderer.shadowMap.needsUpdate=true;
         }
-        if(kind==='scan'){
+        if(kind==='scan'||kind==='full'){
           roof.constant=mode==='plan'?1.45:2.12;
-          object.traverse(o=>{if(o.isMesh){o.material.clippingPlanes=mode==='inside'?bounds:[...bounds,roof];o.material.needsUpdate=true;}});
+          object.traverse(o=>{if(o.isMesh){o.material.clippingPlanes=mode==='walk'?[]:mode==='inside'?bounds:[...bounds,roof];o.material.needsUpdate=true;}});
         }
       }
-      grid.visible=mode!=='inside';loaded=true;dirty=true;el('test').disabled=false;
+      grid.visible=!['walk','inside'].includes(mode);walk.setEnabled(mode==='walk');loaded=true;dirty=true;el('test').disabled=false;
+      if(mode==='walk')canvas.focus({preventScroll:true});
       el('state').textContent=isLocal()?'實景視差 · '+data.stations[station].name:names[mode]+' · '+labels[kind];
     }catch(err){
       if(ticket===generation){el('state').textContent='載入失敗';el('note').textContent=err.message+'。可重新選擇位置或顯示方式。';}
@@ -141,9 +151,14 @@ async function run(){
     const button=document.createElement('button');button.className='station';
     const image=new Image();image.src=s.photo;image.alt='';
     button.append(image,document.createTextNode(s.name));
-    button.onclick=()=>select('inside',i);stationButtons.push(button);el('stations').append(button);
+    button.onclick=()=>navigate('inside',i);stationButtons.push(button);el('stations').append(button);
   });
-  modes.forEach(m=>el(m).onclick=()=>select(m));
+  function navigate(next,index=station){
+    const hash=next==='overview'?'':next==='inside'?links[index]:'#'+next;
+    if(location.hash!==hash)history.pushState(null,'',location.pathname+location.search+hash);
+    return select(next,index);
+  }
+  modes.forEach(m=>el(m).onclick=()=>navigate(m));
   el('method').onchange=e=>{
     if(mode==='inside')insideMethod=e.target.value;else overviewMethod=e.target.value;
     select(mode);
@@ -174,11 +189,13 @@ async function run(){
     if(w===lastWidth&&h===lastHeight)return;
     lastWidth=w;lastHeight=h;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
     if(bench)finish('畫布大小已改變，請重新測試。');
-    resetCamera();
+    if(mode==='walk'){camera.fov=68;camera.updateProjectionMatrix();dirty=true;}else resetCamera();
   }
   function lock(value){
     [el('test'),el('method'),el('compare'),...modes.map(el),...stationButtons].forEach(b=>b.disabled=value);
-    controls.enabled=!value&&!isLocal();
+    el('method').disabled=value||mode==='walk';
+    walk.setEnabled(!value&&mode==='walk');
+    controls.enabled=!value&&!isLocal()&&mode!=='walk';
   }
   function finish(message){bench=null;lock(false);resetCamera();el('note').textContent=message;el('fps').textContent='';}
   el('test').onclick=()=>{
@@ -189,7 +206,9 @@ async function run(){
   document.addEventListener('visibilitychange',()=>{if(document.hidden&&bench)finish('測試已中止，請維持前景後重測。');});
   function animateTest(now){
     bench.start??=now;const ms=now-bench.start,phase=ms/12000*2*Math.PI;
-    if(isLocal()){dx=Math.sin(phase);dy=.6*Math.cos(phase);}
+    if(mode==='walk'){
+      camera.rotation.set(-.13+.06*Math.sin(phase),walk.yaw+.68*Math.sin(phase),0,'YXZ');
+    }else if(isLocal()){dx=Math.sin(phase);dy=.6*Math.cos(phase);}
     else if(mode==='inside'){
       const s=data.stations[station];const dir=new THREE.Vector3().fromArray(s.direction).applyAxisAngle(V(0,1,0),.3*Math.sin(phase));
       camera.position.copy(controls.target).addScaledVector(dir,-.038);camera.lookAt(controls.target);
@@ -209,13 +228,13 @@ async function run(){
   const links=['#bed','#desk','#mirror','#rug'];
   function followLink(){
     const deep=links.indexOf(location.hash);
-    return select(deep>=0?'inside':'overview',deep<0?0:deep);
+    return select(location.hash==='#walk'?'walk':location.hash==='#plan'?'plan':deep>=0?'inside':'overview',deep<0?0:deep);
   }
   window.addEventListener('hashchange',followLink);
   await followLink();
   renderer.setAnimationLoop(now=>{
     if(!loaded)return;
-    if(bench)animateTest(now);else if(controls.enabled)controls.update();
+    if(bench)animateTest(now);else if(mode==='walk')walk.tick(now);else if(controls.enabled)controls.update();
     if(!dirty||comparing)return;
     const kind=method(),x=camera.position.x-home.x,z=camera.position.z-home.z;
     if(isLocal()){

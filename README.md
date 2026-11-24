@@ -1,12 +1,26 @@
 # 臥室空間重建
 
-**[在 GitHub Pages 開啟整間臥室](https://clarencechien.github.io/teslarvpoc/)**
+**[開啟全室剖視](https://clarencechien.github.io/teslarvpoc/) · [走進房間](https://clarencechien.github.io/teslarvpoc/#walk) · [平面俯視](https://clarencechien.github.io/teslarvpoc/#plan) · [下載全室 GLB](https://clarencechien.github.io/teslarvpoc/bedroom-full.glb)**
+
+![同一間臥室的立體剖面與房內步行視角](assets/full-room-preview.jpg)
+
+以 Redwood Bedroom 公開掃描和 601 組彩色照片、深度圖重建同一間臥室。剖視可看床、壁爐、桌椅與走道的配置。切到「全室漫遊」，用 WASD、方向鍵或畫面箭頭走動，拖曳轉頭。三個視圖使用同一個含照片貼圖的 GLB。手繪格局與原始掃描也保留在「顯示方式」供比較。[Redwood 原始資料](https://www.redwood-data.org/indoor_lidar_rgbd/)
+
+### 全室表面與材質
+
+先將上游重建網格對齊地板，用房間邊界補上掃描缺口，再以 Poisson 表面重建整合成 115,000 個三角面。每個貼圖像素依深度、遮蔽、拍攝角度與距離融合多張實拍觀測，並以重疊影像校正曝光。下載的單一 GLB 內含 3072 × 3072 貼圖，約 4.5 MiB。在房內以同一份網格向地板和四周投射射線，取得約 10.8 平方公尺相連的可行走區域。
+
+約 57% 的有效貼圖像素有直接照片觀測。其餘依鄰近表面的色彩補足，窗簾上緣延續下方布料，缺資料的上半牆與天花板補上推估材質。窗邊過曝、細椅腳和鏡面仍有失真。剖視會隨相機方向切開靠近觀者的牆面與屋頂，漫遊則顯示所有方向的表面。
+
+從床邊、書桌、鏡台、地毯各取兩張未用於貼圖的照片，使用資料集提供的同一相機位置渲染對照。八張平均 SSIM 從舊網格 **0.377** 提升至全室新版 **0.492**，四個位置均有改善。兩版共用上游重建資料。評估使用 640 × 480 影像，四邊各裁掉 10%。下圖每個位置各選一張保留照片。
+
+![依序為舊掃描、新全室模型與同視角原始照片](room/site/full-room-comparison.jpg)
+
+全室漫遊模式在 Linux headless Chromium、SwiftShader 軟體渲染、969 × 574 畫布下，暖機 2 秒後原地轉頭 10 秒，平均 5.7 FPS，P95 畫格間隔 316.6 ms。實體 GPU 的 60 FPS 仍待量測，可在頁面使用「測試幀率」。
+
+### 局部實景近看
 
 [床邊](https://clarencechien.github.io/teslarvpoc/#bed) · [書桌](https://clarencechien.github.io/teslarvpoc/#desk) · [鏡台](https://clarencechien.github.io/teslarvpoc/#mirror) · [床尾地毯](https://clarencechien.github.io/teslarvpoc/#rug)
-
-![依掃描位置與照片重畫的臥室格局](assets/room-preview.jpg)
-
-剖視與俯視預設顯示按照片、掃描位置重畫的完整格局，主要家具可以在 Blender 單獨選取。床罩與地毯使用原照取樣，其他造型、比例與外觀為近似。顯示方式也可切回掃描網格，兩種 GLB 均可下載。
 
 室內近看使用四組局部高斯潑濺。在床邊、書桌、鏡台與床尾地毯位置，拖曳可左右各移 4.5 cm、上下各移 2.5 cm，雙擊或 Home 回到中心。「對照原始照片」顯示對應的完整中心影像。視角範圍之外的部分可用掃描網格環視。
 
@@ -40,13 +54,20 @@
 
 檢視成品只需從 repo 根目錄執行 `python -m http.server 8000 --directory room/site`，在瀏覽器開啟 `http://localhost:8000/`。頁面與貼圖均由同一站台提供。
 
-若要重新製作模型，從 Open3D 的 20220301-data 發行版本下載 bedroom01.zip 至 bedroom05.zip，解壓至同一目錄。根目錄應包含 bedroom.ply、bedroom.log，以及 image/ 和 depth/。腳本每 73 幀取一組 RGB-D 影像。測試環境為 Python 3.12。[輸入檔案與官方校驗碼](https://github.com/isl-org/Open3D/blob/main/cpp/open3d/data/dataset/BedroomRGBDImages.cpp) · [資料封存檔](https://github.com/isl-org/open3d_downloads/releases/tag/20220301-data)
+若要重新製作模型，從 Open3D 的 20220301-data 發行版本下載 bedroom01.zip 至 bedroom05.zip，解壓至同一目錄。根目錄應包含 bedroom.ply、bedroom.log，以及 image/ 和 depth/。原始網格每 73 幀取一組 RGB-D，全室貼圖每 73 幀取兩組。測試環境為 Python 3.12。[輸入檔案與官方校驗碼](https://github.com/isl-org/Open3D/blob/main/cpp/open3d/data/dataset/BedroomRGBDImages.cpp) · [資料封存檔](https://github.com/isl-org/open3d_downloads/releases/tag/20220301-data)
 
 ```sh
 python3 -m venv .venv
 . .venv/bin/activate
 pip install -r room/requirements.txt
 OPENBLAS_NUM_THREADS=1 python scripts/build_room.py /path/to/bedroom room/site
+```
+
+全室模型使用 Linux 的 C++17、OpenMP 與下列 Python 套件。第三個參數指定這次重建專用的空白暫存目錄，需容納至少 2 GB 中間資料。
+
+```sh
+pip install -r room/full-requirements.txt
+OMP_NUM_THREADS=4 OPENBLAS_NUM_THREADS=1 python scripts/build_full_room.py /path/to/bedroom room/site /tmp/redwood-full-bake
 ```
 
 若要重建格局和實景模式，在上述模型步驟後執行以下指令。格局建模使用 Blender 4.3，分層貼圖建置需要 C++17 編譯器和支援 WebP 的 Pillow。輸入資料目錄需保留各位置相鄰的彩色及深度原圖。
