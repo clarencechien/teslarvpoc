@@ -44,7 +44,7 @@ python scripts/reconstruct.py
 
 Musk 描述的 Reality View 會從共用視覺編碼器 UVE 取得特徵，讓獨立的約十億參數擴散模型利用上一段輸出生成新畫面。據其說明，UVE 以 18 Hz 更新，顯示端每批產生 8 幀，以 36 FPS 播放。截至 2026-11-24，在 Tesla 的公開專案中未找到這套模型的權重或推論 API。本 repo 的照片重建在離線階段完成，瀏覽器每幀只需繪製網格。[Musk 的技術說明](https://x.com/elonmusk/status/2124458557525397780) · [Tesla 官方 GitHub](https://github.com/teslamotors)
 
-可對照的 X 作品是 sharp_maker 的「どこでもロケハン」，它用街廓圖資與高程建立可調整視角的 3D 場景，支援台灣。若目標是修改台北風格街廓，city-pcg 也有可調參數的瀏覽器展示。兩者都可直接試用。[X 貼文](https://x.com/sharp_maker/status/2109834006703292423) · [どこでもロケハン](https://oyasumi-gamedev.com/tools/rokehan/) · [Taipei PCG](https://jason9075.github.io/city-pcg/)
+台北開發者 Jason Kuan（jason9075）的 Taipei PCG 以台北的道路層級、街廓密度與捷運周邊建築分布為原型，可以在瀏覽器調整參數並重新生成 3D 城市。作者的公開資料列出所在地為台北。目前仍缺少能將這件作品與所述 X 貼文連起來的原文。[線上展示](https://jason9075.github.io/city-pcg/) · [作品說明](https://github.com/jason9075/city-pcg) · [作者資料](https://github.com/jason9075)
 
 ## 影像來源與使用條件
 
