@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="zh-Hant"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>車庫 · 雙眼攝影重建</title>
+<style>
+:root{color-scheme:dark;font-family:Inter,"Noto Sans TC",system-ui,sans-serif;background:#161b1c;color:#edf3ec}
+*{box-sizing:border-box}body{margin:0}main{max-width:1350px;margin:auto;padding:clamp(16px,4vw,52px)}
+header,footer,.bar,.stats{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+header{padding-bottom:20px}h1{margin:0;font-size:clamp(26px,4.5vw,52px);font-weight:580;letter-spacing:-.045em}
+.sub,footer{font-size:13px;color:#b8c2be}p{line-height:1.6}a{color:#c6e39a}
+.stage{border:1px solid #475453;border-radius:14px;overflow:hidden;background:#202829}
+canvas{display:block;width:100%;height:clamp(320px,64vh,750px);touch-action:none;cursor:grab}canvas:active{cursor:grabbing}
+.bar{padding:14px 18px;border-top:1px solid #42504c}button,select{font:inherit;color:inherit;background:#293331;border:1px solid #57645e;border-radius:7px;padding:8px 13px;cursor:pointer}button:hover,select:hover{border-color:#c4e7a5}
+button:disabled{opacity:.65;cursor:wait}.accent{background:#c6e39a;color:#202a1a;border-color:#c6e39a}
+.controls{display:flex;flex-wrap:wrap;gap:6px}.stats{justify-content:flex-start;gap:24px;font:14px "IBM Plex Mono",monospace;color:#d0e3bd}footer{margin-top:16px}
+#result{min-height:1.6em;color:#d5e3cb}label{display:inline-flex;align-items:center;gap:6px}
+</style>
+<main><header><div><div class="sub">Middlebury Stereo 2014 / Motorcycle</div><h1>車庫的雙眼攝影重建</h1></div><button id="download">下載 3D 模型 ↓</button></header>
+<section class="stage" aria-label="可旋轉的車庫模型"><canvas tabindex="0" aria-label="拖曳或方向鍵旋轉，滾輪或加減鍵縮放"></canvas>
+<div class="bar"><div class="stats"><span id="mesh"></span><span id="fps">— FPS</span></div>
+<div class="controls"><label><select id="resolution" aria-label="渲染解析度"><option value="1">全解析度</option><option value="0.5">半解析度</option></select></label> <label><select id="mode" aria-label="顯示方式"><option value="0">照片貼圖</option><option value="1">相機深度</option><option value="2">幾何點雲</option></select></label>
+<button id="reset">回到正面</button> <button class="accent" id="bench">測試幀率</button></div></div></section>
+<p id="result" role="status">拖曳旋轉，滾輪縮放。轉到側面可看見兩張照片未涵蓋的區域。</p>
+<footer><span>資料來源 · <a href="https://vision.middlebury.edu/stereo/data/scenes2014/">Middlebury College</a></span><span>OpenCV StereoSGBM · WebGL</span></footer></main>
+<script type="application/json" id="model"><!-- MODEL --></script>
+<script>/* APP */</script></html>
