@@ -125,12 +125,12 @@ class Glb:
         self.doc['accessors'].append(a)
         return len(self.doc['accessors'])-1
 
-    def primitive(self,name,positions,faces,uv=None,atlas=None,colors=None):
+    def primitive(self,name,positions,faces,uv=None,atlas=None,colors=None,*,jpeg_quality=89):
         attr={'POSITION':self.acc(positions.astype('<f4'),True)}
         pbr=dict(metallicFactor=0,roughnessFactor=1)
         if uv is not None:
             attr['TEXCOORD_0']=self.acc(uv.astype('<f4'))
-            ok,jpg=cv2.imencode('.jpg',atlas,[cv2.IMWRITE_JPEG_QUALITY,89])
+            ok,jpg=cv2.imencode('.jpg',atlas,[cv2.IMWRITE_JPEG_QUALITY,jpeg_quality])
             if not ok:raise RuntimeError('JPEG encoding failed')
             image=len(self.doc['images'])
             self.doc['images'].append(dict(mimeType='image/jpeg',bufferView=self.view(jpg.tobytes())))

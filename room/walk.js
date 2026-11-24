@@ -52,7 +52,7 @@ export class RoomWalk {
     const {origin,step,rows}=this.grid;
     return rows[Math.round((z-origin[1])/step)]?.[Math.round((x-origin[0])/step)]==='1';
   }
-  enter(x=2.2,z=-1.8,lookX=.10,lookZ=.75){
+  enter(x=1.89,z=-1.10,lookX=.37,lookZ=1.03){
     let best=Infinity,px=x,pz=z;
     const {rows,origin,step}=this.grid;
     for(let j=0;j<rows.length;j++)for(let i=0;i<rows[j].length;i++){
@@ -61,7 +61,7 @@ export class RoomWalk {
       if(dist<best){best=dist;px=gx;pz=gz;}
     }
     this.position.set(px,1.52,pz);
-    this.yaw=Math.atan2(px-lookX,pz-lookZ);this.pitch=-.16;
+    this.yaw=Math.atan2(px-lookX,pz-lookZ);this.pitch=-.34;
     this.camera.fov=68;this.camera.updateProjectionMatrix();this.apply();
   }
   apply(){

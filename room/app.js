@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { RoomWalk } from './walk.js';
+import { WalkPhotos } from './walk-photos.js';
 import { loadSplats, loadSplatLayers, localCamera } from './local-splats.js';
 
 const el=id=>document.getElementById(id);
@@ -53,6 +54,7 @@ async function run(){
   const gridResponse=await fetch('./walk-grid.json');
   if(!gridResponse.ok)throw Error('無法載入房間動線');
   const walk=new RoomWalk(camera,await gridResponse.json(),canvas,el('walk-pad'),()=>{dirty=true;});
+  const walkPhotos=new WalkPhotos();
   const isLocal=()=>['splat','live'].includes(method());
   controls.addEventListener('change',()=>{dirty=true;});
 
@@ -60,7 +62,7 @@ async function run(){
     if(!cache.has(key)){
       const promise=key.startsWith('splat-')?loadSplatLayers(Number(key.slice(6))):
         key.startsWith('live-')?loadSplats(Number(key.slice(5))):
-        loader.loadAsync(key==='full'?'./bedroom-full.glb':key==='layout'?'./bedroom-layout.glb':'./bedroom.glb').then(a=>a.scene);
+        loader.loadAsync(key==='full'?'./bedroom-full.glb?v=photo2':key==='layout'?'./bedroom-layout.glb':'./bedroom.glb').then(a=>a.scene);
       cache.set(key,promise);
       promise.catch(()=>cache.delete(key));
     }
@@ -104,7 +106,7 @@ async function run(){
     }
     el('method').value=method();el('method').disabled=mode==='walk';el('compare').hidden=mode!=='inside';
     const layout=method()==='layout',full=method()==='full';
-    el('download').href=full?'./bedroom-full.glb':layout?'./bedroom-layout.glb':'./bedroom.glb';
+    el('download').href=full?'./bedroom-full.glb?v=photo2':layout?'./bedroom-layout.glb':'./bedroom.glb';
     el('download').textContent=full?'下載全室 GLB ↓':layout?'下載格局 GLB ↓':'下載掃描 GLB ↓';
     canvas.setAttribute('aria-label',mode==='walk'?'拖曳轉頭，WASD 或方向鍵移動':isLocal()?'拖曳或用方向鍵移動視角':'拖曳環繞整間臥室，滾輪或雙指縮放');
     el('note').textContent=descriptions[mode==='walk'?'walk':method()==='live'?'splat':method()];
@@ -119,6 +121,15 @@ async function run(){
       const kind=method(),key=isLocal()?kind+'-'+data.stations[station].id:kind;
       const object=await load(key);
       if(ticket!==generation)return;
+      if(kind==='full'){
+        if(mode==='walk')walkPhotos.load();
+        object.traverse(mesh=>{
+          if(!mesh.isMesh)return;
+          mesh.userData.atlasMaterial??=mesh.material;
+          if(mode==='walk')mesh.userData.walkMaterial??=walkPhotos.material(mesh.userData.atlasMaterial);
+          mesh.material=mode==='walk'?mesh.userData.walkMaterial:mesh.userData.atlasMaterial;
+        });
+      }
       if(active)active.removeFromParent();
       active=object;
       if(isLocal())splatScene.add(object);
@@ -235,6 +246,7 @@ async function run(){
   renderer.setAnimationLoop(now=>{
     if(!loaded)return;
     if(bench)animateTest(now);else if(mode==='walk')walk.tick(now);else if(controls.enabled)controls.update();
+    if(mode==='walk'&&walkPhotos.update(camera,now))dirty=true;
     if(!dirty||comparing)return;
     const kind=method(),x=camera.position.x-home.x,z=camera.position.z-home.z;
     if(isLocal()){

@@ -13,7 +13,7 @@
 #include <vector>
 using namespace std;
 namespace fs = std::filesystem;
-constexpr int S = 3072, W = 640, H = 480;
+constexpr int S = 4096, W = 640, H = 480;
 using Vec3 = array<float, 3>;
 using Vec2 = array<float, 2>;
 template <class T>
@@ -100,6 +100,36 @@ struct View {
     read(f, depth.data(), depth.size());
     read(f, surface.data(), surface.size());
   }
+  // Estimate focus from the ratio of fine to coarse gradients across image tiles.
+  // Interpolating a low-resolution map keeps camera preferences coherent over a surface.
+  static constexpr int tile = 32, cols = W / tile, rows = H / tile;
+  array<float, cols * rows> focus{};
+  void measureFocus() {
+    for (int ty = 0; ty < rows; ++ty) {
+      for (int tx = 0; tx < cols; ++tx) {
+        double fine = 0, coarse = 0;
+        for (int y = max(3, ty * tile); y < min(H - 3, (ty + 1) * tile); y += 2) {
+          for (int x = max(3, tx * tile); x < min(W - 3, (tx + 1) * tile); x += 2) {
+            int i = (y * W + x) * 3 + 1;
+            for (int stride : {3, W * 3}) {
+              fine += abs(rgb[i - stride] - rgb[i + stride]);
+              coarse += abs(rgb[i - 3 * stride] - rgb[i + 3 * stride]);
+            }
+          }
+        }
+        // The prior keeps flat surfaces and sensor noise from dominating view selection.
+        focus[ty * cols + tx] = clamp(float((fine + 320) / (coarse + 640)), .27f, .75f);
+      }
+    }
+  }
+  float focusAt(float u, float v) const {
+    float x = clamp(u / tile - .5f, 0.f, float(cols - 1)),
+          y = clamp(v / tile - .5f, 0.f, float(rows - 1));
+    int x0 = int(x), y0 = int(y), x1 = min(cols - 1, x0 + 1), y1 = min(rows - 1, y0 + 1);
+    float fx = x - x0, fy = y - y0;
+    return (1 - fy) * ((1 - fx) * focus[y0 * cols + x0] + fx * focus[y0 * cols + x1]) +
+           fy * ((1 - fx) * focus[y1 * cols + x0] + fx * focus[y1 * cols + x1]);
+  }
   Vec3 camera(Vec3 p) const {
     float x = p[0] - m[0], y = p[1] - m[1], z = p[2] - m[2];
     return {x * m[3] + y * m[6] + z * m[9], x * m[4] + y * m[7] + z * m[10],
@@ -109,7 +139,7 @@ struct View {
     auto [x, y, z] = camera(p);
     return z > -.23f && abs(x) < .61f * z + .31f && abs(y) < .46f * z + .31f;
   }
-  float sample(const Texel& s, Vec3& col) const {
+  float sample(const Texel& s, Vec3& col, float* detail = nullptr) const {
     auto [x, y, z] = camera(s.p);
     if (z < .18f) return 0;
     float u = 319.5f + 525.f * x / z, v = 239.5f + 525.f * y / z;
@@ -137,6 +167,10 @@ struct View {
       int b = (iy * W + ix) * 3 + k;
       col[k] = (1 - fy) * ((1 - fx) * rgb[b] + fx * rgb[b + 3]) +
                fy * ((1 - fx) * rgb[b + 3 * W] + fx * rgb[b + 3 * W + 3]);
+    }
+    if (detail) {
+      // Prefer pixels with smaller projected footprints and focused source detail.
+      *detail = weight * (.70f + focusAt(u, v)) / (.65f + z);
     }
     return weight;
   }
@@ -197,27 +231,50 @@ int main(int argc, char** argv) {
   omp_set_num_threads(4);
   Surface surf(work / "geometry.bin");
   const auto gains = exposure(surf, work / "views.bin");
+  save(work / "photo-gains.bin", gains);
   ifstream f(work / "views.bin", ios::binary);
   int count;
   read(f, &count, 1);
   vector<array<float, 4>> blend(S * S);
+  vector<array<float, 4>> broad(S * S);
+  vector<float> peak(S * S);
   vector<Vec3> xyz(S * S);
   vector<uint8_t> mask(S * S);
   View view;
   for (int i = 0; i < count; i++) {
     view.load(f);
+    view.measureFocus();
 #pragma omp parallel for schedule(dynamic, 8)
     for (size_t j = 0; j < surf.bins.size(); j++) {
       auto& b = surf.bins[j];
       if (!view.visible(b.center)) continue;
       for (const auto& s : b.samples) {
         Vec3 c;
-        float w = view.sample(s, c);
-        if (w <= 0) continue;
-        // Favor frontal, nearby observations smoothly in world space.
-        w *= w;
+        float quality = 0;
+        float support = view.sample(s, c, &quality);
+        if (support <= 0) continue;
+        support *= support;
+        // A peaked but continuous blend keeps one or two well-registered source
+        // photos dominant. Normalize to the running maximum to retain weakly seen areas.
+        auto& best = peak[s.pixel];
         auto& out = blend[s.pixel];
-        for (int k = 0; k < 3; k++) out[k] += w * min(255.f, c[k] * gains[i]);
+        auto power8 = [](float x) {
+          float x2 = x * x, x4 = x2 * x2;
+          return x4 * x4;
+        };
+        if (quality > best) {
+          float factor = power8(best / quality);
+          for (float& value : out) value *= factor;
+          best = quality;
+        }
+        float w = power8(quality / best);
+        auto& average = broad[s.pixel];
+        for (int k = 0; k < 3; k++) {
+          float sample = min(255.f, c[k] * gains[i]);
+          out[k] += w * sample;
+          average[k] += support * sample;
+        }
+        average[3] += support;
         out[3] += w;
       }
     }
@@ -229,8 +286,12 @@ int main(int argc, char** argv) {
       mask[s.pixel] = c[3] > 0 ? 2 : 1;
       xyz[s.pixel] = s.p;
       if (c[3] > 0)
-        for (int k = 0; k < 3; k++)
-          rgb[3 * s.pixel + k] = clamp(lround(255 * pow(c[k] / (255 * c[3]), .82f)), 0L, 255L);
+        for (int k = 0; k < 3; k++) {
+          const auto& average = broad[s.pixel];
+          // Retain the broader exposure estimate around highlights and slight misregistrations.
+          float sample = .67f * c[k] / c[3] + .33f * average[k] / average[3];
+          rgb[3 * s.pixel + k] = clamp(lround(255 * pow(sample / 255, .82f)), 0L, 255L);
+        }
     }
   save(work / "atlas.bgr", rgb);
   save(work / "world.bin", xyz);

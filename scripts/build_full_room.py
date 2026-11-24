@@ -13,6 +13,7 @@ from scipy.spatial import cKDTree
 import xatlas
 
 from build_room import Glb
+from walk_photos import write_walk_photos
 from room_geometry import geometry
 
 LOW = np.array([-2.29, -0.025, -2.41])
@@ -95,6 +96,7 @@ def unwrap(work, p, t):
     chart.max_iterations = 1
     chart.max_chart_area = 1.5
     pack = xatlas.PackOptions()
+    # Keep chart layout stable across atlas editions. Normalized UVs are rasterized at 4096.
     pack.resolution = 3072
     pack.padding = 4
     atlas.generate(chart, pack)
@@ -313,7 +315,7 @@ def main():
     )
     if not args.reuse_bake:
         subprocess.run([binary, work], check=True)
-    side = 3072
+    side = 4096
     colors = np.fromfile(work / "atlas.bgr", "u1").reshape(side, side, 3)
     valid = np.fromfile(work / "mask.bin", "u1").reshape(side, side)
     # Complete unobserved texels in world space, keeping adjacent atlas
@@ -345,9 +347,12 @@ def main():
     model.doc["asset"][
         "generator"
     ] = "teslarvpoc / Poisson surface with registered multi-view texture"
-    model.primitive("Bedroom photographic atlas", p[ids], tri, uv, colors)
+    model.primitive(
+        "Bedroom photographic atlas", p[ids], tri, uv, colors, jpeg_quality=96
+    )
     model.write(args.site / "bedroom-full.glb")
     (args.site / "walk-grid.json").write_text(json.dumps(nav, separators=(",", ":")))
+    write_walk_photos(work, args.site)
     print("Ready", flush=True)
 
 
