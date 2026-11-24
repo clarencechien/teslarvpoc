@@ -19,6 +19,8 @@ from room_geometry import geometry
 LOW = np.array([-2.29, -0.025, -2.41])
 HIGH = np.array([3.35, 3.72, 2.31])
 EVALUATION = {i + d for i in (9637, 877, 14017, 17521) for d in (-6, 6)}
+EVALUATION.update(i * 73 + 19 for i in (5, 43, 81, 119, 157, 195, 233, 271))
+EVALUATION.update((8 + i * 24) * 73 + 25 for i in range(12))
 
 
 def write_raw(file, *arrays):
@@ -146,19 +148,18 @@ def walk_grid(scene):
     )
 
 
-def camera_data(dataset, work, poses, axes, origin, scene):
-    frames = [
-        i
-        for i in range(1, len(poses) + 1)
-        if (i % 73 in (1, 37)) and i not in EVALUATION
-    ]
+def camera_frames(count, offsets):
+    return [i for i in range(1, count + 1) if i % 73 in offsets and i not in EVALUATION]
+
+
+def camera_data(dataset, target, poses, axes, origin, scene, frames):
     h, w = 240, 320
     v, u = np.mgrid[:h, :w]
     dirs = np.stack(
         ((2 * u + 0.5 - 319.5) / 525, (2 * v + 0.5 - 239.5) / 525, np.ones_like(v)),
         axis=2,
     ).astype("f4")
-    temporary = work / "views.partial"
+    temporary = target.with_suffix(".partial")
     with open(temporary, "wb") as fp:
         np.array([len(frames)], "<i4").tofile(fp)
         for i in frames:
@@ -187,8 +188,18 @@ def camera_data(dataset, work, poses, axes, origin, scene):
                 rendered.astype("<f4"),
             ):
                 arr.tofile(fp)
-    temporary.replace(work / "views.bin")
-    return len(frames)
+    temporary.replace(target)
+
+
+def write_dense_walk(dataset, site, work, poses, axes, origin, scene):
+    base_frames = camera_frames(len(poses), (1, 37))
+    frames = camera_frames(len(poses), (1, 19, 37, 55))
+    target = work / "walk-views.bin"
+    camera_data(dataset, target, poses, axes, origin, scene, frames)
+    # The interleaved cameras inherit a smoothly varying exposure correction
+    # from the calibrated atlas cameras immediately before and after them.
+    gains = np.fromfile(work / "photo-gains.bin", "<f4")
+    write_walk_photos(target, site, np.interp(frames, base_frames, gains), frames)
 
 
 def upper_wall_finish(xyz, known, colors):
@@ -291,8 +302,11 @@ def main():
     scene = o3d.t.geometry.RaycastingScene(nthreads=4)
     scene.add_triangles(o3d.core.Tensor(p), o3d.core.Tensor(t))
     nav = walk_grid(scene)
+    atlas_frames = camera_frames(len(poses), (1, 37))
     if not (work / "views.bin").exists():
-        camera_data(args.dataset, work, poses, axes, origin, scene)
+        camera_data(
+            args.dataset, work / "views.bin", poses, axes, origin, scene, atlas_frames
+        )
     write_raw(
         work / "geometry.bin",
         np.array([len(ids), len(tri)], "<u4"),
@@ -352,7 +366,7 @@ def main():
     )
     model.write(args.site / "bedroom-full.glb")
     (args.site / "walk-grid.json").write_text(json.dumps(nav, separators=(",", ":")))
-    write_walk_photos(work, args.site)
+    write_dense_walk(args.dataset, args.site, work, poses, axes, origin, scene)
     print("Ready", flush=True)
 
 

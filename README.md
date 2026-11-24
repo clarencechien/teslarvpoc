@@ -12,21 +12,38 @@
 
 約 57% 的有效貼圖像素有直接照片觀測。其餘依鄰近表面的色彩補足，窗簾上緣延續下方布料，缺資料的上半牆與天花板補上推估材質。窗邊過曝、細椅腳和鏡面仍有失真。剖視會隨相機方向切開靠近觀者的牆面與屋頂，漫遊則顯示所有方向的表面。
 
-漫遊會依目前相機的位置和朝向，從 288 個校正過的拍攝視角載入鄰近的照片。照片投影在同一個 3D 表面上，來源深度與表面不吻合的地方沿用全室貼圖。轉身換照片時有短暫淡化過渡。瀏覽器按需下載，記憶體最多保留六張。下載的 GLB 使用自己的 4K 貼圖，額外的視角投影在網頁執行。
+漫遊使用 1,194 組 RGB-D，把同一段拍攝軌跡取樣得更密。瀏覽器依位置和朝向選出兩張鄰近照片，逐像素檢查深度，讓第二張補足第一張看不到的部分。站點切換時淡入，最多快取六張。獨立 GLB 與剖視仍使用由 601 組觀測製成的 4K 貼圖。[視角選擇的研究依據 · Unstructured Lumigraph Rendering](https://www.cs.princeton.edu/courses/archive/spring01/cs598b/papers/buehler01.pdf)
 
-使用 16 張未參與貼圖或投影的 640 × 480 原照，在原相機位置渲染後，四邊各裁去 10% 計算 SSIM。前八張取自床邊、書桌、鏡台、地毯，每個位置兩張。另八張分散於原始拍攝軌跡，幀號為 384、3158、5932、8706、11480、14254、17028、19802。各版都使用資料集的相機軌跡及上游網格。
+原照有顏色但深度失效時，先測試網格上的位置能否投回其他照片。至少兩個彼此相距超過 6 公分的相機都量到相符深度，而且顏色一致，才採用這個位置。若只有來源照片有顏色，接近原拍攝點時仍可顯示該視角，離開就淡回全室貼圖。完全沒拍到的天花板仍為推估。如果改用生成式補繪，可以得到合理外觀，但需要另行標示推測成分。[深度分層與生成補繪研究](https://openaccess.thecvf.com/content_CVPR_2020/html/Shih_3D_Photography_Using_Context-Aware_Layered_Depth_Inpainting_CVPR_2020_paper.html)
 
-| 同視角測試 | 上一版全室 | 新版獨立 GLB | 新版網頁漫遊 |
+**床頭窗邊的量測。** 在靠近床頭牆 45 公分以內、高 1.4–2.83 公尺的區域，按半解析度像素取樣，總計有 348,610 筆缺少來源深度的觀測，當中 138,173 筆（39.6%）得到其他相機的深度及色彩支持。這個比例包含同一處在不同照片的重複觀測。所有角度都過曝的窗外景物仍無從辨識。
+
+#### 漫遊畫質驗證
+
+使用相同相機位姿渲染，與未參與貼圖及投影的 640 × 480 原照比對，四邊各裁掉 10% 計算 SSIM。各版共用上游重建幾何與相機軌跡。28 張用於比較實作，另保留 10 張，在選定發布版本後才比較結果。[38 張逐幀分數](room/walk-evaluation.csv)
+
+| 同視角平均 SSIM | 上一版 288 個視角 | 本版 1,194 個視角 | 進步張數 |
 | --- | ---: | ---: | ---: |
-| 四個位置，8 張 | 0.492 | 0.464 | 0.562 |
-| 沿拍攝軌跡，8 張 | 0.519 | 0.514 | 0.552 |
-| 16 張平均 | 0.505 | 0.489 | 0.557 |
+| 前次沿用的 16 張 | 0.557 | 0.601 | 16 / 16 |
+| 另外 12 張 | 0.611 | 0.654 | 10 / 12 |
+| 選定版本後驗證的 10 張 | 0.625 | 0.649 | 6 / 10 |
 
-新版漫遊有 12 個視角的 SSIM 提高。獨立 GLB 的紋理更明顯，但有些花紋因投影錯位，與原照的逐區對應較差。下圖以相同像素範圍裁切，保留實際紋理的大小。
+在前 28 張上，只使用 601 個來源、依相機位置選一張的試作平均為 0.588。換成 1,194 個來源且仍只選一張，平均為 0.608。使用兩張互補的發布版本為 0.624。低光和反光處仍可能有重影。下圖最後一列是退步例子，床罩皺褶和地面交界仍有錯位。
 
-![左為上一版全室，中為新版網頁漫遊，右為未參與貼圖的原始照片](room/site/full-room-comparison.jpg)
+![同視角比較，含書桌、櫃門布紋與床罩邊緣的退步例子](room/site/full-room-comparison.jpg)
 
-全室漫遊模式在 Linux headless Chromium、SwiftShader 軟體渲染、969 × 574 畫布下，暖機 2 秒後原地轉頭 10 秒，平均 4.4 FPS，P95 畫格間隔 299.9 ms。實體 GPU 的 60 FPS 仍待量測，可在頁面使用「測試幀率」。
+在 Linux Chromium 的 SwiftShader 軟體渲染環境，969 × 574 畫布暖機 2 秒後量測原地轉頭 10 秒，上一版平均 4.4 FPS，本版為 3.5 FPS（P95 畫格間隔 583.2 ms）。實體 GPU 與手機可從網頁按「測試幀率」實測。
+
+### 其他可用的實拍資料集
+
+選場景時要分清楚原始幀數、可用相機位姿數和真正看到新表面的角度數。Redwood Bedroom 的軌跡有 21,931 幀，原照是 640 × 480。以下數量分別註明計算單位。
+
+| 場景 | 照片與拍攝方式 | 適合的實驗 |
+| --- | --- | --- |
+| Oxford Spires · Christ Church 03 | 核對官方 `raw/images.zip` 目錄，三台相機各有 6,204、6,179、6,163 張，共 **18,546 張**。官方標為室內，抽看的原圖為 1440 × 1080，可見大廳、窗戶和樓梯。 | 想看完整室內空間可先用這組。另附相機校正、軌跡與 LiDAR，魚眼照片須依校正投影。[場景檔案](https://huggingface.co/datasets/ori-drs/oxford_spires_dataset/tree/main/sequences/2024-03-18-christ-church-03) |
+| Oxford Spires · Blenheim Palace 03 | 同樣依影像封存檔逐項計數，三台相機各有 13,814、13,735、13,759 張，共 **41,308 張**。這是一條涵蓋室內外的路線。 | 適合測試從戶外走入建築，以及明暗轉換。兩條 Oxford 路線均為非商業授權。[場景檔案](https://huggingface.co/datasets/ori-drs/oxford_spires_dataset/tree/main/sequences/2024-03-14-blenheim-palace-03) · [規格與授權](https://dynamic.robots.ox.ac.uk/datasets/oxford-spires/) |
+| ScanNet++ | 初版論文的 460 個場景共有 28 萬張 **33 MP** 相機照片和超過 370 萬幀 iPhone RGB-D，換算每場景平均約 609 張高解析照片、超過 8,000 幀手機影像。v2 已擴至逾千個場景。 | 要還原布紋、木紋或小字優先看這組。不同感測器已配準，完整資料需向官方申請。[資料入口](https://scannetpp.mlsg.cit.tum.de/scannetpp/) · [初版統計](https://openaccess.thecvf.com/content/ICCV2023/papers/Yeshwanth_ScanNet_A_High-Fidelity_Dataset_of_3D_Indoor_Scenes_ICCV_2023_paper.pdf) |
+| BundleFusion · Apt 1 | 論文附表列出**同一間公寓 8,580 幀 RGB-D**，相機軌跡長 91.8 公尺。官方提供逐幀照片、深度與位姿。 | 適合把同一套漫遊流程移到另一間真實住宅。[公寓資料](https://graphics.stanford.edu/projects/bundlefusion/) · [論文附錄表 III](https://pure.mpg.de/pubman/item/item_2351932_3/component/file_2351931/arXiv%3A1604.01093.pdf) |
 
 ### 局部實景近看
 
@@ -64,7 +81,7 @@
 
 檢視成品只需從 repo 根目錄執行 `python -m http.server 8000 --directory room/site`，在瀏覽器開啟 `http://localhost:8000/`。頁面與貼圖均由同一站台提供。
 
-若要重新製作模型，從 Open3D 的 20220301-data 發行版本下載 bedroom01.zip 至 bedroom05.zip，解壓至同一目錄。根目錄應包含 bedroom.ply、bedroom.log，以及 image/ 和 depth/。原始網格每 73 幀取一組 RGB-D，全室貼圖每 73 幀取兩組。測試環境為 Python 3.12。[輸入檔案與官方校驗碼](https://github.com/isl-org/Open3D/blob/main/cpp/open3d/data/dataset/BedroomRGBDImages.cpp) · [資料封存檔](https://github.com/isl-org/open3d_downloads/releases/tag/20220301-data)
+若要重新製作模型，從 Open3D 的 20220301-data 發行版本下載 bedroom01.zip 至 bedroom05.zip，解壓至同一目錄。根目錄應包含 bedroom.ply、bedroom.log，以及 image/ 和 depth/。原始網格每 73 幀取一組 RGB-D，全室貼圖每 73 幀取兩組，漫遊每 73 幀取四組，並排除留作驗證的幀。測試環境為 Python 3.12。[輸入檔案與官方校驗碼](https://github.com/isl-org/Open3D/blob/main/cpp/open3d/data/dataset/BedroomRGBDImages.cpp) · [資料封存檔](https://github.com/isl-org/open3d_downloads/releases/tag/20220301-data)
 
 ```sh
 python3 -m venv .venv
@@ -73,7 +90,7 @@ pip install -r room/requirements.txt
 OPENBLAS_NUM_THREADS=1 python scripts/build_room.py /path/to/bedroom room/site
 ```
 
-全室模型使用 Linux 的 C++17、OpenMP 與下列 Python 套件。第三個參數指定這次重建專用的空白暫存目錄，需容納至少 3 GB 中間資料。
+全室模型使用 Linux 的 C++17、OpenMP 與下列 Python 套件。第三個參數指定這次重建專用的空白暫存目錄，需容納至少 6 GB 中間資料。
 
 ```sh
 pip install -r room/full-requirements.txt
