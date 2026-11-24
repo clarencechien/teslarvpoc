@@ -2,15 +2,39 @@
 
 **[在 GitHub Pages 開啟整間臥室](https://clarencechien.github.io/teslarvpoc/)**
 
-![從斜上方剖視臥室，可看見床、窗戶、地毯、座椅及壁爐](assets/room-preview.jpg)
+[床邊](https://clarencechien.github.io/teslarvpoc/#bed) · [書桌](https://clarencechien.github.io/teslarvpoc/#desk) · [鏡台](https://clarencechien.github.io/teslarvpoc/#mirror) · [床尾地毯](https://clarencechien.github.io/teslarvpoc/#rug)
 
-首頁從斜上方打開房間，可以拖曳環繞、切換平面俯視，或點床邊、書桌、鏡台三個實拍位置進入室內。點「對照原始照片」可以看同一位置的相機影像。下載的 GLB 同時包含實測網格以及可在 3D 編輯器中單獨選取的推估房間外殼。
+![依掃描位置與照片重畫的臥室格局](assets/room-preview.jpg)
 
-### 模型如何製作
+剖視與俯視預設顯示按照片、掃描位置重畫的完整格局，主要家具可以在 Blender 單獨選取。床罩與地毯使用原照取樣，其他造型、比例與外觀為近似。顯示方式也可切回掃描網格，兩種 GLB 均可下載。
+
+室內近看使用四組局部高斯潑濺。在床邊、書桌、鏡台與床尾地毯位置，拖曳可左右各移 4.5 cm、上下各移 2.5 cm，雙擊或 Home 回到中心。「對照原始照片」顯示對應的完整中心影像。視角範圍之外的部分可用掃描網格環視。
+
+### 實景近看的做法與驗證
+
+每個位置使用 5 組 RGB-D 影像（中心及前後 12、24 幀）。以量測深度建立扁平 3D 高斯，透過相機位姿從相鄰影像補入遮蔽後方的樣本，再用深度與顏色一致性加權擬合顏色。缺少深度的位置先嘗試跨幀補點，其餘借用鄰近深度。每組約 9–10 萬個高斯。中心、尺度與透明度來自深度和取樣密度，只有顏色經多視角擬合。這個實驗的範圍是局部視角，未訓練整室自由漫遊的 3DGS。
+
+瀏覽器預設使用「實景高斯視差」：離線將相同高斯依距離歸入 32 個逆深度層，合成帶透明度的貼圖，移動時按各層深度連續投影。也能選「逐點高斯潑濺」即時繪製同一組高斯。原照解析度為 640 × 480，放大、遮蔽邊界與反光處仍可能模糊。
+
+每個位置保留中心前後第 6 幀，不參與局部高斯建模與舊網格貼圖。依其相機位姿各渲染 640 × 480，在每邊裁掉 10% 後量測 RGB SSIM（1 最接近原照）。兩種方法使用資料集提供的相機軌跡，舊網格採用上游完整掃描。下表是每組兩幀平均。
+
+| 位置 | 舊掃描網格 | 新版高斯視差 |
+| --- | ---: | ---: |
+| 床邊 | 0.227 | 0.415 |
+| 書桌 | 0.342 | 0.654 |
+| 鏡台 | 0.411 | 0.719 |
+| 床尾地毯 | 0.530 | 0.790 |
+| 八張平均 | 0.377 | 0.644 |
+
+![在四個保留視角並排比較舊網格、新版高斯視差以及實際照片](room/site/view-comparison.jpg)
+
+在 Linux headless Chromium、SwiftShader 軟體渲染、969 × 574 畫布，床尾地毯的固定視差路徑暖機 2 秒、取樣 10 秒，分層繪製平均 33.9 FPS，P95 為 50.0 ms。每台裝置可用「測試幀率」重測目前視圖。
+
+### 掃描網格如何製作
 
 以 Redwood 公開的 Bedroom 多視角 RGB-D 重建網格與相機軌跡為起點。先將場景對齊地板、簡化到 86,999 個實測表面三角面，再以 301 組實拍彩色及深度影像做可見性比對。從中選取 95 個視角製作貼圖，依相鄰三角面的連續性和曝光差修整拼接。約 76% 的實測三角面有通過深度檢查的直接照片對應，其餘使用鄰近表面的顏色。窗邊過曝、鏡面、桌椅細部和織物局部仍有接縫。未掃到的牆面、地板和天花板另以推估平面封口，這些平面不代表實測細節。完整室內來自 Redwood 的臥室，舊版車庫另保留於下方。
 
-全室版實測於 Linux headless Chromium 156、SwiftShader 軟體渲染、969 × 574 畫布。固定路徑暖機 2 秒後量測 10 秒，平均 14.3 FPS，P95 畫格間隔 133.2 ms。可用頁面上的「測試幀率」在實體裝置重測。
+前一版全室掃描網格實測於 Linux headless Chromium 156、SwiftShader 軟體渲染、969 × 574 畫布。固定路徑暖機 2 秒後量測 10 秒，平均 14.3 FPS，P95 畫格間隔 133.2 ms。可用頁面上的「測試幀率」在實體裝置重測。
 
 ### 在本機重現
 
@@ -23,6 +47,14 @@ python3 -m venv .venv
 . .venv/bin/activate
 pip install -r room/requirements.txt
 OPENBLAS_NUM_THREADS=1 python scripts/build_room.py /path/to/bedroom room/site
+```
+
+若要重建格局和實景模式，在上述模型步驟後執行以下指令。格局建模使用 Blender 4.3，分層貼圖建置需要 C++17 編譯器和支援 WebP 的 Pillow。輸入資料目錄需保留各位置相鄰的彩色及深度原圖。
+
+```sh
+blender -b -P scripts/build_layout.py -- room/site
+OPENBLAS_NUM_THREADS=1 python scripts/build_local_splats.py /path/to/bedroom room/site
+python scripts/bake_splat_layers.py room/site
 ```
 
 前端原始碼在 `room/app.js`。在 `room` 執行 `npm ci` 和 `npm run build` 可更新 `site/viewer.js`。Pages 從 `gh-pages` 根目錄發佈 `room/site/` 的靜態成品。

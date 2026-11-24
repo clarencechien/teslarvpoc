@@ -16,7 +16,7 @@ FOCAL = 525
 TILE_W, TILE_H, PAD, SIDE = 384, 288, 2, 2048
 COLS, ROWS = SIDE//(TILE_W+2*PAD), SIDE//(TILE_H+2*PAD)
 PER_PAGE = COLS*ROWS
-CAMERAS = [(9637,'床邊'), (877,'書桌'), (14017,'鏡台')]
+CAMERAS = [(9637,'床邊'), (877,'書桌'), (14017,'鏡台'), (17521,'床尾地毯')]
 
 
 def projection(points, pose):

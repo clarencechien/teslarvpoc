@@ -2,11 +2,11 @@
 <html lang="zh-Hant"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#f0eee7"><title>臥室全景 · Redwood Bedroom</title><link rel="stylesheet" href="./style.css"></head>
 <body><main>
-<header><div><p class="kicker">Redwood / Bedroom</p><h1>臥室空間重建</h1></div><a class="download" href="./bedroom.glb" download>下載 3D 模型 ↓</a></header>
+<header><div><p class="kicker">Redwood / Bedroom</p><h1>臥室空間重建</h1></div><a class="download" id="download" href="./bedroom-layout.glb" download>下載格局 GLB ↓</a></header>
 <div class="workspace"><section class="stage" aria-label="臥室三維視窗"><canvas id="view" tabindex="0" aria-label="拖曳旋轉視角，滾輪或雙指縮放"></canvas><img id="reference" alt="目前位置的原始相機照片" hidden>
-<nav aria-label="觀察模式"><button id="overview" aria-pressed="true">全室剖視</button><button id="plan" aria-pressed="false">平面俯視</button><button id="inside" aria-pressed="false">室內視角</button></nav>
+<nav aria-label="觀察模式"><button id="overview" aria-pressed="true">全室剖視</button><button id="plan" aria-pressed="false">平面俯視</button><button id="inside" aria-pressed="false">室內近看</button></nav>
 <div class="legend"><span id="state" role="status">載入臥室模型中…</span><span id="fps"></span></div></section>
-<aside><h2>拍攝位置</h2><div id="stations"></div><div class="tools"><button id="compare" hidden>對照原始照片</button><button id="test">測試幀率</button></div>
+<aside><label class="method">顯示方式<select id="method"></select></label><h2>拍攝位置</h2><div id="stations"></div><div class="tools"><button id="compare" hidden>對照原始照片</button><button id="test">測試幀率</button></div>
 <p id="note" aria-live="polite">拖曳可環繞整間臥室，滾輪或雙指可縮放。</p></aside></div>
-<footer><span>RGB-D 實景重建 · 牆、地板與天花板的缺口以推估平面補齊。</span><a href="https://www.redwood-data.org/indoor_lidar_rgbd/">Redwood 資料來源 ↗</a></footer>
+<footer><span>格局模型依實拍與掃描描繪，家具造型與材質為近似。</span><a href="./view-comparison.jpg">同視角實拍比較 ↗</a><a href="https://www.redwood-data.org/indoor_lidar_rgbd/">Redwood 資料來源 ↗</a></footer>
 </main><script type="module" src="./viewer.js"></script></body></html>
