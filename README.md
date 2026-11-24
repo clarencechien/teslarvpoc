@@ -4,6 +4,8 @@
 
 ![車庫的照片貼圖與同一個網格的相機深度，暖色較近](assets/preview.jpg)
 
+**[直接在 GitHub Pages 開啟 3D 展示](https://clarencechien.github.io/teslarvpoc/)**
+
 **[下載互動展示 viewer.html](https://github.com/clarencechien/teslarvpoc/raw/refs/heads/main/viewer.html)**，儲存後以支援 WebGL 的瀏覽器開啟。這個單檔內含幾何、照片貼圖與程式。若瀏覽器限制開啟本機檔，在 repo 目錄執行 `python -m http.server 8000`，前往 `http://localhost:8000/viewer.html`。
 
 - 拖曳或用方向鍵轉動，滾輪或鍵盤 `+`、`-` 縮放。可切換照片、深度與點雲。
