@@ -1,0 +1,8 @@
+{
+  "name": "redwood-room-viewer",
+  "private": true,
+  "type": "module",
+  "scripts": {"build": "esbuild app.js --bundle --minify --legal-comments=linked --format=esm --outfile=site/viewer.js"},
+  "dependencies": {"three": "0.183.2"},
+  "devDependencies": {"esbuild": "0.25.12"}
+}

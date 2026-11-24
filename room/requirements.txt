@@ -1,0 +1,5 @@
+-r ../requirements.txt
+fast-simplification==0.2.0
+plyfile==1.1.5
+Pillow==13.0.0
+scipy==1.17.0

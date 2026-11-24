@@ -1,10 +1,37 @@
-# 車庫的雙眼攝影重建
+# 臥室空間重建
+
+**[在 GitHub Pages 開啟整間臥室](https://clarencechien.github.io/teslarvpoc/)**
+
+![從斜上方剖視臥室，可看見床、窗戶、地毯、座椅及壁爐](assets/room-preview.jpg)
+
+首頁從斜上方打開房間，可以拖曳環繞、切換平面俯視，或點床邊、書桌、鏡台三個實拍位置進入室內。點「對照原始照片」可以看同一位置的相機影像。下載的 GLB 同時包含實測網格以及可在 3D 編輯器中單獨選取的推估房間外殼。
+
+### 模型如何製作
+
+以 Redwood 公開的 Bedroom 多視角 RGB-D 重建網格與相機軌跡為起點。先將場景對齊地板、簡化到 86,999 個實測表面三角面，再以 301 組實拍彩色及深度影像做可見性比對。從中選取 95 個視角製作貼圖，依相鄰三角面的連續性和曝光差修整拼接。約 76% 的實測三角面有通過深度檢查的直接照片對應，其餘使用鄰近表面的顏色。窗邊過曝、鏡面、桌椅細部和織物局部仍有接縫。未掃到的牆面、地板和天花板另以推估平面封口，這些平面不代表實測細節。完整室內來自 Redwood 的臥室，舊版車庫另保留於下方。
+
+### 在本機重現
+
+檢視成品只需從 repo 根目錄執行 `python -m http.server 8000 --directory room/site`，在瀏覽器開啟 `http://localhost:8000/`。頁面與貼圖均由同一站台提供。
+
+若要重新製作模型，從 Open3D 的 20220301-data 發行版本下載 bedroom01.zip 至 bedroom05.zip，解壓至同一目錄。根目錄應包含 bedroom.ply、bedroom.log，以及 image/ 和 depth/。腳本每 73 幀取一組 RGB-D 影像。測試環境為 Python 3.12。[輸入檔案與官方校驗碼](https://github.com/isl-org/Open3D/blob/main/cpp/open3d/data/dataset/BedroomRGBDImages.cpp) · [資料封存檔](https://github.com/isl-org/open3d_downloads/releases/tag/20220301-data)
+
+```sh
+python3 -m venv .venv
+. .venv/bin/activate
+pip install -r room/requirements.txt
+OPENBLAS_NUM_THREADS=1 python scripts/build_room.py /path/to/bedroom room/site
+```
+
+前端原始碼在 `room/app.js`。在 `room` 執行 `npm ci` 和 `npm run build` 可更新 `site/viewer.js`。Pages 從 `gh-pages` 根目錄發佈 `room/site/` 的靜態成品。
+
+Jaesik Park, Qian-Yi Zhou, Vladlen Koltun. *Colored Point Cloud Registration Revisited*. ICCV 2017. Redwood 將 RGB-D 影像與重建模型釋出為公有領域並要求註明出處。[資料集與論文](https://www.redwood-data.org/indoor_lidar_rgbd/) · [使用條件](https://redwood-data.org/indoor_lidar_rgbd/license.html)
+
+## 早期實驗 · 車庫的雙眼攝影重建
 
 兩張實拍照片可以做出可以旋轉的 3D 表面。這個實驗用 Middlebury 的 Motorcycle 車庫場景估算深度，保留 21,061 個頂點和 38,379 個三角面。滑鼠拖曳時，前輪和後方貨架會產生不同幅度的位移。轉到側面會看見遮蔽造成的孔洞，兩張正面照片只能重建局部室內。
 
 ![車庫的照片貼圖與同一個網格的相機深度，暖色較近](assets/preview.jpg)
-
-**[直接在 GitHub Pages 開啟 3D 展示](https://clarencechien.github.io/teslarvpoc/)**
 
 **[下載互動展示 viewer.html](https://github.com/clarencechien/teslarvpoc/raw/refs/heads/main/viewer.html)**，儲存後以支援 WebGL 的瀏覽器開啟。這個單檔內含幾何、照片貼圖與程式。若瀏覽器限制開啟本機檔，在 repo 目錄執行 `python -m http.server 8000`，前往 `http://localhost:8000/viewer.html`。
 
