@@ -35,3 +35,8 @@ footer span{flex:1 1 320px}
 .pad button:first-child{grid-column:2}.pad button:nth-child(2){grid-column:1}
 [hidden]{display:none!important}
 @media(max-width:600px){main{padding:14px 10px}.stage{height:59svh;min-height:320px}nav{left:7px;top:7px}nav button{font-size:12px;padding:6px 9px}.control{gap:7px;padding:10px 0}.control h2{width:100%}#stations button{font-size:13px;padding:6px 8px}.notes{gap:7px}.notes p{flex-basis:100%}footer{gap:8px}}
+
+#photo-route,#photo-stops button{border-color:var(--line)}
+#photo-stops{display:inline-flex;gap:6px;align-items:center}
+#photo-progress{font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+#photo-stops button:disabled{cursor:default}
