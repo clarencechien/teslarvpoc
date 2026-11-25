@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 
+import {createChurchGame, inChurchGame} from './church-game.js';
+
 const $ = id => document.getElementById(id);
 const canvas = $('view');
 const turn = new THREE.Euler(0, 0, 0, 'YXZ');
@@ -18,6 +20,8 @@ const uniform = {
 };
 let renderer, controls, views, grid, current, model, mode='walk', dirty=true, ready=false;
 let detailView, pending, generation=0, lastTime=0, lastSelection=0, drag, benchmark;
+let gameScene, scanLoad, gameLoad, action=0, photoReturn;
+const strolling=()=>mode==='walk'||mode==='game';
 const cache = new Map();
 const textureLoader = new THREE.TextureLoader();
 
@@ -113,25 +117,29 @@ function setMode(next) {
   scene.background.setHex(next==='overview'?0xe2ddd1:0x302e28);
   keys.clear();
   controls.enabled=next==='overview';
-  $('pad').hidden=next!=='walk';
+  $('pad').hidden=!strolling();
   $('reference').hidden=next!=='compare';
   $('detail').disabled=next!=='walk';
   $('bench').disabled=next==='compare';
-  for(const id of ['walk','overview','compare']) $(id).setAttribute('aria-pressed',String(id===next));
+  for(const id of ['walk','game','overview','compare']) $(id).setAttribute('aria-pressed',String(id===next));
   for(const material of model.materials) material.clippingPlanes=next==='overview'?[cut]:[];
   uniform.churchGain.value=0;
-  $('help').textContent=next==='overview'?'拖曳旋轉、滾輪或雙指縮放。為看清配置，這個視圖切開屋頂。':next==='compare'?'原始魚眼相機照片，可檢查窗框、桌沿和石階的細節。':'拖曳環顧，用方向鍵或 WASD 沿拍攝區域移動。';
+  $('help').textContent=next==='game'?'沿石階走到平台，可轉身走上另一段樓梯。石材、欄杆與燈具為遊戲美術重繪。':next==='overview'?'拖曳旋轉、滾輪或雙指縮放。為看清配置，這個視圖切開屋頂。':next==='compare'?'原始魚眼相機照片，可檢查窗框、桌沿和石階的細節。':'拖曳環顧，用方向鍵或 WASD 沿拍攝區域移動。';
   dirty=true;
 }
 
-function station(view) {
-  current=view;setMode('walk');
+function positionAt(view) {
+  current=view;
   camera.position.copy(view.position);
   turn.setFromRotationMatrix(view.matrix,'YXZ');turn.z=0;
   if(view.id===198) turn.x+=.24;
   camera.quaternion.setFromEuler(turn);
   $('caption').textContent=view.name||'鄰近拍攝點';
   highlight(view);
+}
+
+function station(view) {
+  setMode('walk');positionAt(view);
   selectDetail();
   canvas.focus({preventScroll:true});
 }
@@ -163,6 +171,7 @@ function constrain(x,z){
   const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/(grid.cell*.5)));
   let height=camera.position.y;
   for(let i=1;i<=steps;i++){
+    if(mode==='game'&&!inChurchGame(camera.position.x+dx*i/steps,camera.position.z+dz*i/steps)) return;
     const col=Math.round((camera.position.x+dx*i/steps-grid.origin[0])/grid.cell);
     const row=Math.round((-camera.position.z-dz*i/steps-grid.origin[1])/grid.cell);
     if(col<0||row<0||col>=grid.cols||row>=grid.rows) return;
@@ -171,7 +180,7 @@ function constrain(x,z){
     height=cm*.01;
   }
   camera.position.set(x,height,z);
-  $('caption').textContent='室內漫遊';highlight(null);
+  $('caption').textContent=mode==='game'?'遊戲重繪 · 石階':'室內漫遊';highlight(null);
 }
 
 function step(time){
@@ -179,7 +188,7 @@ function step(time){
   if(!ready||document.hidden){lastTime=0;return;}
   const dt=lastTime?Math.min(.1,(time-lastTime)/1000):0;
   lastTime=time;
-  if(mode==='walk'&&keys.size){
+  if(strolling()&&keys.size){
     const forward=Number(keys.has('KeyW'))-Number(keys.has('KeyS'));
     const right=Number(keys.has('KeyD'))-Number(keys.has('KeyA'));
     const speed=dt*2.35/Math.max(1,Math.hypot(forward,right));
@@ -191,7 +200,7 @@ function step(time){
   if(benchmark){
     if(benchmark.last) benchmark.frames.push(time-benchmark.last);
     benchmark.last=time;
-    if(mode==='walk'){turn.y+=dt*.13;camera.quaternion.setFromEuler(turn);}
+    if(strolling()){turn.y+=dt*.13;camera.quaternion.setFromEuler(turn);}
     else {camera.position.sub(controls.target).applyAxisAngle(THREE.Object3D.DEFAULT_UP,dt*.13).add(controls.target);camera.lookAt(controls.target);}
     dirty=true;
     if(time-benchmark.start>4500 && benchmark.frames.length){
@@ -202,12 +211,16 @@ function step(time){
     }
   }
   if(time-lastSelection>140){selectDetail();lastSelection=time;}
-  if(dirty&&mode!=='compare'){renderer.render(scene,camera);dirty=false;}
+  if(dirty&&mode!=='compare'){renderer.render(mode==='game'?gameScene:scene,camera);dirty=false;}
 }
 
 async function start(){
   renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
   renderer.localClippingEnabled=true;
+  renderer.shadowMap.enabled=true;
+  renderer.shadowMap.type=THREE.PCFShadowMap;
+  // Static game geometry and lighting share a single shadow map across camera poses.
+  renderer.shadowMap.autoUpdate=false;
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));
   controls=new OrbitControls(camera,canvas);controls.enabled=false;controls.minDistance=5;controls.maxDistance=115;
   controls.maxPolarAngle=Math.PI*.485;
@@ -219,12 +232,7 @@ async function start(){
   new ResizeObserver(resize).observe(canvas);resize();
   const compact=window.matchMedia('(max-width: 680px)').matches;
   const modelFile=compact?'christ-church-mobile.glb':'christ-church.glb';
-  const [data,gltf]=await Promise.all([
-    fetch('./scene.json?v=treads1').then(r=>{if(!r.ok)throw Error();return r.json();}),
-    new GLTFLoader().loadAsync('./'+modelFile+'?v=treads1',event=>{
-      if(event.lengthComputable) $('loading').textContent='正在載入大廳模型 '+Math.min(99,Math.round(100*event.loaded/event.total))+'%';
-    })
-  ]);
+  const data=await fetch('./scene.json?v=treads1').then(r=>{if(!r.ok)throw Error();return r.json();});
   views=data.views;
   grid=data.walkGrid;
   const bytes=Uint8Array.from(atob(grid.heights),c=>c.charCodeAt(0));
@@ -236,25 +244,65 @@ async function start(){
     view.forward=new THREE.Vector3(0,0,-1).transformDirection(view.matrix);
   }
   model={materials:[]};
-  gltf.scene.traverse(obj=>{
-    if(!obj.isMesh)return;
-    const mat=obj.material;
-    model.materials.push(mat);photoProjection(mat);
-    if(mat.map){
-      const tex=mat.map;
-      tex.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+  async function loadScan() {
+    const gltf=await new GLTFLoader().loadAsync('./'+modelFile+'?v=treads1');
+    gltf.scene.traverse(obj=>{
+      if(!obj.isMesh)return;
+      const mat=obj.material;
+      model.materials.push(mat);photoProjection(mat);
+      if(mat.map)mat.map.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
+    });
+    scene.add(gltf.scene);
+  }
+  async function activate(kind,show) {
+    const token=++action;
+    const loading=$('loading');
+    loading.hidden=false;loading.textContent=kind==='game'?'正在載入遊戲石階…':'正在載入實測場景…';
+    try {
+      if(kind==='game'){
+        gameLoad??=createChurchGame(renderer).then(s=>{gameScene=s;}).catch(e=>{gameLoad=null;throw e;});
+        await gameLoad;
+      }else{
+        scanLoad??=loadScan().catch(e=>{scanLoad=null;throw e;});
+        await scanLoad;
+      }
+      if(token!==action)return;
+      loading.hidden=true;show();dirty=true;ready=true;
+    } catch(error) {
+      if(token!==action)return;
+      console.error(error);loading.textContent='場景載入失敗，請再按一次視圖按鈕重試。';
     }
-  });
-  scene.add(gltf.scene);
+  }
+  function enterGame() {
+    activate('game',()=>{
+      if(!strolling()||!inChurchGame(camera.position.x,camera.position.z))positionAt(views.find(v=>v.id===198));
+      setMode('game');renderer.shadowMap.needsUpdate=true;
+      $('caption').textContent='遊戲重繪 · 石階';canvas.focus({preventScroll:true});
+    });
+  }
   for(const view of views.filter(v=>v.name)){
     const button=document.createElement('button');
-    button.textContent=view.name;button.dataset.id=view.id;button.onclick=()=>station(view);
+    button.textContent=view.name;button.dataset.id=view.id;button.onclick=()=>activate('scan',()=>station(view));
     $('stations').append(button);
   }
-  $('walk').onclick=()=>station(current);$('overview').onclick=overview;
+  $('game').onclick=enterGame;
+  $('walk').onclick=()=>activate('scan',()=>{
+    if(mode==='game'){
+      setMode('walk');$('caption').textContent='室內漫遊';selectDetail();canvas.focus({preventScroll:true});
+    }else station(current);
+  });
+  $('overview').onclick=()=>activate('scan',overview);
   $('compare').onclick=()=>{
-    if(mode==='compare'){station(current);return;}
-    if(mode==='walk'){
+    if(!ready)return;
+    ++action;$('loading').hidden=true;
+    if(mode==='compare'){
+      if(photoReturn==='game'){
+        setMode('game');$('caption').textContent='遊戲重繪 · 石階';
+      }else station(current);
+      return;
+    }
+    photoReturn=mode;
+    if(strolling()){
       const direction=camera.getWorldDirection(tmp);
       const score=v=>v.position.distanceToSquared(camera.position)+4.2*(1-direction.dot(v.forward));
       current=views.reduce((a,b)=>score(b)<score(a)?b:a);
@@ -266,18 +314,18 @@ async function start(){
   $('detail').onchange=()=>{selectDetail();dirty=true;};
   $('bench').onclick=()=>{benchmark={start:performance.now(),last:0,frames:[]};$('bench').disabled=true;$('help').textContent='正在轉動視角量測幀率…';};
   canvas.addEventListener('pointerdown',e=>{
-    if(mode!=='walk')return;
+    if(!strolling())return;
     drag={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove',e=>{
-    if(!drag||drag.id!==e.pointerId||mode!=='walk')return;
+    if(!drag||drag.id!==e.pointerId||!strolling())return;
     turn.y-=(e.clientX-drag.x)*.004;turn.x=THREE.MathUtils.clamp(turn.x-(e.clientY-drag.y)*.004,-1.42,1.42);
     camera.quaternion.setFromEuler(turn);drag.x=e.clientX;drag.y=e.clientY;dirty=true;
   });
   canvas.addEventListener('lostpointercapture',()=>{drag=null;});
   window.addEventListener('keydown',e=>{
     const key=moveKeys[e.code]||e.code;
-    if(mode==='walk'&&['KeyW','KeyA','KeyS','KeyD'].includes(key)&&!e.target.matches('input:not([type=checkbox]),textarea,select')){keys.add(key);e.preventDefault();}
+    if(strolling()&&['KeyW','KeyA','KeyS','KeyD'].includes(key)&&!e.target.matches('input:not([type=checkbox]),textarea,select')){keys.add(key);e.preventDefault();}
   });
   window.addEventListener('keyup',e=>keys.delete(moveKeys[e.code]||e.code));
   window.addEventListener('blur',()=>keys.clear());
@@ -285,7 +333,9 @@ async function start(){
     button.onpointerdown=e=>{button.setPointerCapture(e.pointerId);keys.add(button.dataset.key);};
     button.onlostpointercapture=()=>keys.delete(button.dataset.key);
   }
-  ready=true;station(views.find(v=>v.id===(location.hash==='#stairs-up'?198:21)));$('loading').hidden=true;
+  current=views.find(v=>v.id===(location.hash==='#stairs-up'||location.hash==='#game-stairs'?198:21));
+  if(location.hash==='#game-stairs')enterGame();
+  else activate('scan',()=>station(current));
   requestAnimationFrame(step);
 }
 start().catch(error=>{console.error(error);$('loading').textContent='模型未能載入。可重新整理，或使用下方連結下載 GLB。';});

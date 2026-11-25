@@ -6,6 +6,14 @@
 
 進入後拖曳環顧，用方向鍵、WASD 或觸控方向鈕在拍攝走道附近移動。五個拍攝點可直接跳到大廳或樓梯。[石階仰視](https://clarencechien.github.io/teslarvpoc/christ-church/#stairs-up) 可從下方看窗邊平台。「全區剖視」可看兩個空間如何連通。「疊加近處實拍細節」可切換同一位置的渲染方式。「對照原照」會打開鄰近拍攝點的原始魚眼視圖。
 
+### 石階遊戲重繪
+
+[進入遊戲版石階](https://clarencechien.github.io/teslarvpoc/christ-church/#game-stairs) · [同視角實拍、實測網格與遊戲重繪](https://clarencechien.github.io/teslarvpoc/christ-church/game-comparison.webp)
+
+用方向鍵、WASD 或觸控方向鈕走過兩段石階與共用平台。在石階區按「室內漫遊」或「遊戲重繪」可從目前位置切換兩種畫面，「對照原照」可查看鄰近相機的實拍。從上方連結進入只會載入遊戲場景，切換實測版時才下載完整掃描模型。
+
+兩段樓梯沿用雷射擬合的 11 與 14 個高度落差。三面牆和拱頂用測繪點估計表面起伏，再混合可見實拍的色彩。後方窗框、欄杆、燈具、長椅和南側收邊由程式建立；形狀和光源方向含美術推定。程序將生成的石灰岩紋理固定在模型表面，Three.js 即時繪製光照、窗格投光與陰影。這個展示可檢查橫移時的空間連續性，細部裝飾與日照位置不能作為現場量測。Tesla 描述的 Reality View 則透過視覺特徵和前一段畫面生成下一段影片。[Musk 對 Reality View 的說明](https://x.com/elonmusk/status/2124458557525397780)
+
 ### 石階仰視與橫移對照
 
 石階上被陽光照亮的白斑，前一版會碎成許多三角形。這一版先沿兩段樓梯的固定式雷射剖面找出 11 和 14 個高度落差，再用橫跨階寬的量測點擬合每一級的前緣和坡度。每個踏面和立面各使用一張連續貼圖，每個像素取自可見的實拍照片，避開被前景擋住的觀測，並降低色差特別大的觀測權重。照片看不到的位置取固定掃描點的顏色。此修正涵蓋兩段樓梯，欄杆接縫、平台和牆角仍可見局部缺口。[從石階仰視位置進入](https://clarencechien.github.io/teslarvpoc/christ-church/#stairs-up)
@@ -62,6 +70,7 @@ done
 curl --fail --location --retry 3 "$dataset/ground_truth_map/christ-church/merged-cloud-1cm.pcd" -o /tmp/oxford-spires/merged-cloud-1cm.pcd
 python -m pip install -r room/full-requirements.txt scikit-image==0.25.2
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=4 python scripts/build_christ_church.py /tmp/oxford-spires room/site/christ-church /tmp/oxford-spires/cache
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=4 python scripts/build_church_game.py /tmp/oxford-spires room/site/christ-church
 python scripts/evaluate_christ_church.py /tmp/oxford-spires room/site/christ-church room/christ-church-evaluation.csv
 python scripts/audit_church_geometry.py /tmp/oxford-spires /tmp/current-depth.csv room/site/christ-church/christ-church{,-mobile}.glb
 (cd room && npm ci && npm run build)
