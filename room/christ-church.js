@@ -16,7 +16,7 @@ const uniform = {
   churchLift:{value:0}, churchPhoto:{value:null}, churchDepth:{value:null}, churchInverse:{value:new THREE.Matrix4()},
   churchLens:{value:new THREE.Vector4()}, churchDist:{value:new THREE.Vector4()}, churchGain:{value:0}
 };
-let renderer, controls, views, route, current, model, mode='walk', dirty=true, ready=false;
+let renderer, controls, views, grid, current, model, mode='walk', dirty=true, ready=false;
 let detailView, pending, generation=0, lastTime=0, lastSelection=0, drag, benchmark;
 const cache = new Map();
 const textureLoader = new THREE.TextureLoader();
@@ -56,7 +56,7 @@ function photoProjection(material) {
 
 async function fetchDetail(view) {
   if(cache.has(view.id)) return cache.get(view.id);
-  const pair=await Promise.allSettled([textureLoader.loadAsync('photo-'+view.id+'.webp'),textureLoader.loadAsync('depth-'+view.id+'.png')]);
+  const pair=await Promise.allSettled([textureLoader.loadAsync('photo-'+view.id+'.webp'),textureLoader.loadAsync('depth-'+view.id+'.png?v=survey1')]);
   if(pair.some(result=>result.status==='rejected')){
     for(const result of pair) if(result.status==='fulfilled') result.value.dispose();
     throw new Error('照片讀取失敗');
@@ -85,6 +85,7 @@ function selectDetail(){
   const direction=camera.getWorldDirection(tmp);
   let best,lowest=Infinity;
   for(const view of views){
+    if(view.detail===false) continue;
     const score=camera.position.distanceToSquared(view.position)+4.2*(1-direction.dot(view.forward));
     if(score<lowest){lowest=score;best=view;}
   }
@@ -127,6 +128,7 @@ function station(view) {
   current=view;setMode('walk');
   camera.position.copy(view.position);
   turn.setFromRotationMatrix(view.matrix,'YXZ');turn.z=0;
+  if(view.id===198) turn.x+=.24;
   camera.quaternion.setFromEuler(turn);
   $('caption').textContent=view.name||'鄰近拍攝點';
   highlight(view);
@@ -156,21 +158,19 @@ function overview(){
 }
 
 function constrain(x,z){
-  let nearest,dist=Infinity;
-  for(const p of route){
-    const d=(p[0]-x)**2+(p[2]-z)**2;
-    if(d<dist){nearest=p;dist=d;}
+  // Test intermediate cells too, so a slow frame cannot jump across a wall.
+  const dx=x-camera.position.x, dz=z-camera.position.z;
+  const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/(grid.cell*.5)));
+  let height=camera.position.y;
+  for(let i=1;i<=steps;i++){
+    const col=Math.round((camera.position.x+dx*i/steps-grid.origin[0])/grid.cell);
+    const row=Math.round((-camera.position.z-dz*i/steps-grid.origin[1])/grid.cell);
+    if(col<0||row<0||col>=grid.cols||row>=grid.rows) return;
+    const cm=grid.values[row*grid.cols+col];
+    if(cm===-32768 || Math.abs(cm*.01-height)>.4) return;
+    height=cm*.01;
   }
-  // Keep the eye within the photographed aisles; follow the recorded stair height.
-  if(dist>1.55**2) return;
-  let height=0,total=0;
-  for(const p of route){
-    const d=(p[0]-x)**2+(p[2]-z)**2;
-    if(d>dist+2 || Math.abs(p[1]-nearest[1])>1) continue;
-    const weight=1/(.06+d)**1.6;
-    height+=weight*p[1];total+=weight;
-  }
-  camera.position.set(x,height/total,z);
+  camera.position.set(x,height,z);
   $('caption').textContent='室內漫遊';highlight(null);
 }
 
@@ -220,12 +220,16 @@ async function start(){
   const compact=window.matchMedia('(max-width: 680px)').matches;
   const modelFile=compact?'christ-church-mobile.glb':'christ-church.glb';
   const [data,gltf]=await Promise.all([
-    fetch('./scene.json').then(r=>{if(!r.ok)throw Error();return r.json();}),
-    new GLTFLoader().loadAsync('./'+modelFile,event=>{
+    fetch('./scene.json?v=survey1').then(r=>{if(!r.ok)throw Error();return r.json();}),
+    new GLTFLoader().loadAsync('./'+modelFile+'?v=survey1',event=>{
       if(event.lengthComputable) $('loading').textContent='正在載入大廳模型 '+Math.min(99,Math.round(100*event.loaded/event.total))+'%';
     })
   ]);
-  views=data.views;route=data.route;
+  views=data.views;
+  grid=data.walkGrid;
+  const bytes=Uint8Array.from(atob(grid.heights),c=>c.charCodeAt(0));
+  const heights=new DataView(bytes.buffer);
+  grid.values=Int16Array.from({length:grid.cols*grid.rows},(_,i)=>heights.getInt16(i*2,true));
   for(const view of views){
     view.matrix=new THREE.Matrix4().set(...view.pose.flat());
     view.position=new THREE.Vector3().setFromMatrixPosition(view.matrix);
@@ -273,7 +277,7 @@ async function start(){
   canvas.addEventListener('lostpointercapture',()=>{drag=null;});
   window.addEventListener('keydown',e=>{
     const key=moveKeys[e.code]||e.code;
-    if(mode==='walk'&&['KeyW','KeyA','KeyS','KeyD'].includes(key)&&e.target.tagName!=='INPUT'){keys.add(key);e.preventDefault();}
+    if(mode==='walk'&&['KeyW','KeyA','KeyS','KeyD'].includes(key)&&!e.target.matches('input:not([type=checkbox]),textarea,select')){keys.add(key);e.preventDefault();}
   });
   window.addEventListener('keyup',e=>keys.delete(moveKeys[e.code]||e.code));
   window.addEventListener('blur',()=>keys.clear());
@@ -281,7 +285,7 @@ async function start(){
     button.onpointerdown=e=>{button.setPointerCapture(e.pointerId);keys.add(button.dataset.key);};
     button.onlostpointercapture=()=>keys.delete(button.dataset.key);
   }
-  ready=true;station(views.find(v=>v.id===21));$('loading').hidden=true;
+  ready=true;station(views.find(v=>v.id===(location.hash==='#stairs-up'?198:21)));$('loading').hidden=true;
   requestAnimationFrame(step);
 }
 start().catch(error=>{console.error(error);$('loading').textContent='模型未能載入。可重新整理，或使用下方連結下載 GLB。';});

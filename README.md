@@ -4,28 +4,56 @@
 
 **[進入 Christ Church 03](https://clarencechien.github.io/teslarvpoc/christ-church/) · [下載照片貼圖 GLB](https://clarencechien.github.io/teslarvpoc/christ-church/christ-church.glb)**
 
-![從網頁模型拍下的大廳長桌與石階平台](assets/christ-church-preview.jpg)
+進入後拖曳環顧，用方向鍵、WASD 或觸控方向鈕在拍攝走道附近移動。五個拍攝點可直接跳到大廳或樓梯。[石階仰視](https://clarencechien.github.io/teslarvpoc/christ-church/#stairs-up) 可從下方看窗邊平台。「全區剖視」可看兩個空間如何連通。「疊加近處實拍細節」可切換同一位置的渲染方式。「對照原照」會打開鄰近拍攝點的原始魚眼視圖。
 
-進入後拖曳環顧，用方向鍵、WASD 或觸控方向鈕在拍攝走道附近移動。四個拍攝點可直接跳到大廳長桌、高窗與肖像、樓梯平台或石階入口。「全區剖視」可看兩個空間如何連通。「疊加近處實拍細節」可切換同一位置的渲染方式。「對照原照」會打開鄰近拍攝點的原始魚眼視圖。
+### 石階上的懸浮塊
 
-- **幾何與照片。** Oxford Spires 的三台相機共留下 18,546 張原始照片。這次使用含 872 張 1440 × 1080 已定位照片的處理版，將 292 次機載雷射掃描對到時間差 25 毫秒以內的相機。經點雲融合和 Poisson 重建，桌面版有 234,999 個三角面，內嵌來自 177 個視角的貼圖，檔案約 19.3 MiB。手機版使用 72,000 個三角面，約 6.35 MiB。
-- **清晰度與缺口。** 桌面版 77.23% 的三角面通過照片投影檢查，其餘使用鄰近色彩或中性灰。這個比例按三角面數計算。網頁會按位置和朝向從 110 個視角按需載入照片，利用模型深度排除被遮住的表面。當相機遠離來源，細節會淡回 GLB 的貼圖。人物、桌下、反光以及過曝窗外都還有失真。
-- **換位置的實測。** 從三台相機各取四張未用於貼圖或近景投影的照片。在同一相機位姿，以 400 × 300、垂直視角 66 度重投影成透視圖，計算全畫面灰階 SSIM。桌面網格單用貼圖平均 0.732，加上鄰近實拍後為 0.766。12 張中 10 張提升、1 張持平、1 張略降。這評估的是同場景新視角的外觀，幾何使用共同的雷射掃描。[逐張數據](room/christ-church-evaluation.csv)
-- **瀏覽器效能。** 390 × 844 的行動版視窗、370 × 498 的實際畫布，在桌面 Chromium 的 SwiftShader 軟體渲染環境，於「高窗與肖像」實測平均 12.3 FPS、P95 畫格間隔 116.7 ms。實體手機與桌機 GPU 的結果可在頁面按「測試幀率」量測。
+在石階下方仰視，舊版會在窗前顯示不規則的塊體，關閉實拍細節疊加仍看得見。對應的原照可見一人站在平台上，另一些拍攝位置也有人經過。舊流程將不同時間的移動雷射點一起做 Poisson 重建，只檢查網格與最近掃描點的距離。這會保留暫態點，也可能在稀疏的點之間補出表面。特定碎塊的原物無法逐塊辨認。舊版的 SSIM 評估照片外觀，無法驗證空中是否真的有表面。
+
+![同一相機位置的石階原照、舊網格和新版網格，關閉近景照片](room/site/christ-church/stairs-comparison.jpg)
+
+新版用 Oxford 官方的固定式地面雷射測繪圖決定靜態表面。用 239 組同步位姿做剛體對齊，配對位置殘差的中位數 1.5 公分、P95 2.9 公分。這是軌跡對齊的殘差。將測繪點從走道上的 79 個位置投成六方向深度圖，以 4.6 公分體素做 TSDF 融合。簡化前後檢查三角面的頂點與中心，距固定掃描超過 13.5 公分的面會被移除。移動掃描的候選面須有跨位置重複命中，或同時貼近獨立的固定式測繪，並通過空間穿透檢查；用它們補回固定式掃描看不全的踏面。最後在仍有缺口的區域加入貼近固定測繪點的局部 Poisson 補面。將實拍照片投回網格時，同時檢查三角形邊界與拍攝當時的移動雷射遮蔽，有量到近處遮擋的位置會拒用背景投影。缺乏整面照片的位置，優先用至多五張可見實拍的逐點中位色，仍缺資料時使用固定掃描的色彩。[固定式掃描來源](https://huggingface.co/datasets/ori-drs/oxford_spires_dataset/tree/main/ground_truth_map/christ-church)
+
+| 區域與桌面版本 | 有效雷射光線 | 過早碰撞 >30 cm | 過晚碰撞 >30 cm | 沒有交點 | 距離誤差 ≤12 cm |
+|---|---:|---:|---:|---:|---:|
+| 樓梯舊版 | 324,505 | 10.95% | 2.81% | 0.03% | 83.67% |
+| 樓梯新版 | 324,505 | 2.38% | 4.98% | 0.60% | 88.15% |
+| 大廳舊版 | 355,400 | 9.89% | 2.52% | 0.00% | 81.81% |
+| 大廳新版 | 355,400 | 5.32% | 4.76% | 0.74% | 81.97% |
+
+每條光線從相機沿著有效量測像素發出，對照 GLB 的第一個交點與資料集提供的雷射距離。測試取前相機、完全同時間戳且原始距離在 0.6–22 公尺之間的資料。樓梯使用前相機第 174–209 幀，大廳使用第 18–75 幀，範圍均含兩端。每條光線各計一次，同一物體可能被多次量到。公開深度影像與移動點雲來自同一感測器，這是量測一致性檢查。固定測繪和移動拍攝時間不同，原照中的人物可能造成量測差異。[逐幀距離數據](room/christ-church-geometry.csv)
+
+桌面網格有 408,454 個三角面，79.73% 的三角面通過貼圖檢查。另以 12 張未用於貼圖或細節投影的照片比較外觀，400 × 300 全畫面灰階 SSIM 平均為 0.732，加入鄰近實拍後為 0.782。同一批照片在舊版加入近景投影後平均為 0.766。樓梯近景改用更密的拍攝視角，Pages 現在按需從 162 個位置與方向選圖。手機版保留 180,000 個三角面以減少簡化時的破面。[逐張外觀數據](room/christ-church-evaluation.csv)
+
+### 進一步提高仿真度
+
+Oxford Spires 作者在另外一次採集的影像上測試時，Splatfacto 的跨序列表現比 Nerfacto 差，說明留出不同拍攝路線比隨機抽出相鄰照片更能檢查泛化能力。[原資料集實驗與 Table 5](https://journals.sagepub.com/doi/full/10.1177/02783649251369905)
+
+值得先在樓梯平台做小範圍 A/B。保留經雷射驗證的表面與碰撞，另外訓練會隨觀察方向改變顏色的高斯外觀。比較窗框、石材高光、欄杆在橫移時是否穩定。這是後續實驗建議，目前 Pages 使用照片貼圖與近景投影。
+
+| 本場景的問題 | 研究可用的做法 | 驗收方式 |
+|---|---|---|
+| 石牆、高窗在斜視時紋理會拉長 | 3DGUT 支援魚眼和其他非線性相機，可直接利用完整魚眼畫面訓練。將它與雷射深度約束整合是本場景的實驗設計。[CVPR 2025 論文與程式](https://research.nvidia.com/labs/toronto-ai/3DGUT/) | 預留整段行走路徑的三台相機，同一閾值檢查雷射距離，再比較靜態區域 LPIPS、SSIM 和橫移錄影。 |
+| 照片中有人走過、不同時間曝光不同 | WildGaussians 學習降低暫態遮擋的影響，另外建模外觀變化。2026 年的室內研究也直接比較幾何與動態感知的高斯重建。[WildGaussians](https://wild-gaussians.github.io/) · [室內動態感知研究](https://doi.org/10.1145/3744256.3812573) | 用有人和無人的原照檢查同一處，確認人物離開後，背景石階在另一個位置也能對上。 |
+| 新視角看起來逼真，但空間中可能出現漂浮顆粒 | 以 LiDAR 提供的表面位置與方向限制高斯的位置及形狀。2026 年已有直接用 LiDAR 監督、將高斯對齊表面的研究。[研究論文](https://www.sciencedirect.com/science/article/abs/pii/S0141938226000120) | 同時記錄過早碰撞、漏面、深度誤差，以及高斯畫面自身的透明度累積深度，避免碰撞網格通過而畫面仍漂浮。 |
+| 手機載入量與幀時間 | 訓練可離線完成，GitHub Pages 發布壓縮的 SOG 與不同細節層級；瀏覽器可依觀看位置和預算載入。[PlayCanvas 分區串流文件](https://developer.playcanvas.com/user-manual/gaussian-splatting/building/unified-rendering/lod-streaming/) | 比較同台手機、同一條路徑的首畫面時間、下載量和 P95 幀時間；60 FPS 的單幀預算約 16.7 ms。 |
 
 ### 重建牛津場景
 
 將下列指令的工作目錄設在 repo 根目錄。影像、深度和模型衍生素材沿用 Oxford Spires Dataset 的 CC BY-NC-SA 4.0 授權。作者為 Yifu Tao、Miguel Ángel Muñoz-Bañón、Lintong Zhang、Jiahao Wang、Lanke Frank Tarimo Fu 與 Maurice Fallon。[資料集](https://dynamic.robots.ox.ac.uk/datasets/oxford-spires/) · [場景檔案](https://huggingface.co/datasets/ori-drs/oxford_spires_dataset/tree/main/sequences/2024-03-18-christ-church-03) · [授權](https://creativecommons.org/licenses/by-nc-sa/4.0/)
 
 ```sh
-base=https://huggingface.co/datasets/ori-drs/oxford_spires_dataset/resolve/03f4382308333aa70c3253f12acd3fbf0c7c4a15/sequences/2024-03-18-christ-church-03/processed
+dataset=https://huggingface.co/datasets/ori-drs/oxford_spires_dataset/resolve/03f4382308333aa70c3253f12acd3fbf0c7c4a15
+base=$dataset/sequences/2024-03-18-christ-church-03/processed
 mkdir -p /tmp/oxford-spires
-for asset in colmap/images.zip colmap/transforms_colmap_scaled.json vilens-slam/undist-clouds.zip; do
+for asset in colmap/images.zip colmap/transforms_colmap_scaled.json vilens-slam/undist-clouds.zip trajectory/gt-tum.txt lidar-depths/depths_euc.zip; do
   curl --fail --location --retry 3 "$base/$asset" -o "/tmp/oxford-spires/$(basename "$asset")"
 done
+curl --fail --location --retry 3 "$dataset/ground_truth_map/christ-church/merged-cloud-1cm.pcd" -o /tmp/oxford-spires/merged-cloud-1cm.pcd
 python -m pip install -r room/full-requirements.txt scikit-image==0.25.2
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=4 python scripts/build_christ_church.py /tmp/oxford-spires room/site/christ-church /tmp/oxford-spires/cache
 python scripts/evaluate_christ_church.py /tmp/oxford-spires room/site/christ-church room/christ-church-evaluation.csv
+python scripts/audit_church_geometry.py /tmp/oxford-spires /tmp/current-depth.csv room/site/christ-church/christ-church{,-mobile}.glb
 (cd room && npm ci && npm run build)
 ```
 

@@ -14,7 +14,7 @@ from skimage.metrics import structural_similarity
 from build_christ_church import UP, project, read_photo
 
 
-def glb_scene(path):
+def glb_scene(path, *, textures=True):
     raw = path.read_bytes()
     length = struct.unpack_from("<I", raw, 12)[0]
     doc = json.loads(raw[20 : 20 + length])
@@ -37,6 +37,8 @@ def glb_scene(path):
         xyz = np.ascontiguousarray(pos @ UP, dtype="f4")
         faces = attribute(primitive["indices"], "<u4", 3)
         idx = scene.add_triangles(o3d.core.Tensor(xyz), o3d.core.Tensor(faces))
+        if not textures:
+            continue
         if "TEXCOORD_0" in attributes:
             uv = attribute(attributes["TEXCOORD_0"], "<f4", 2)
             mat = doc["materials"][primitive["material"]]["pbrMetallicRoughness"]
@@ -61,10 +63,9 @@ def sample(img, x, y):
     return np.concatenate(rows).reshape(shape + (img.shape[2],))
 
 
-def render(scene, materials, frame):
-    width, height = 400, 300
+def render(scene, materials, frame, width=400, height=300, vertical_fov=66):
     u, v = np.meshgrid(np.arange(width) + 0.5 - width / 2, np.arange(height) + 0.5 - height / 2)
-    focal = height / (2 * np.tan(np.deg2rad(33)))
+    focal = height / (2 * np.tan(np.deg2rad(vertical_fov / 2)))
     local = np.stack([u, -v, -np.full_like(u, focal)], axis=-1)
     local /= np.linalg.norm(local, axis=2, keepdims=True)
     pose = np.array(frame["transform_matrix"], dtype="f4")
@@ -115,6 +116,8 @@ def evaluate(data, site, output):
     cameras = [[f for f in frames if f"cam{i}_" in f["file_path"]] for i in range(3)]
     sources = []
     for view in views:
+        if not view.get("detail", True):
+            continue
         cam, i = divmod(view["id"], 1000)
         frame = cameras[cam][i]
         sources.append((view["id"], frame, np.array(frame["transform_matrix"])))
