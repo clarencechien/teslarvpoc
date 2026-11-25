@@ -1,4 +1,35 @@
-# 臥室空間重建
+# 室內空間重建
+
+## 牛津基督堂大廳與樓梯
+
+**[進入 Christ Church 03](https://clarencechien.github.io/teslarvpoc/christ-church/) · [下載照片貼圖 GLB](https://clarencechien.github.io/teslarvpoc/christ-church/christ-church.glb)**
+
+![從網頁模型拍下的大廳長桌與石階平台](assets/christ-church-preview.jpg)
+
+進入後拖曳環顧，用方向鍵、WASD 或觸控方向鈕在拍攝走道附近移動。四個拍攝點可直接跳到大廳長桌、高窗與肖像、樓梯平台或石階入口。「全區剖視」可看兩個空間如何連通。「疊加近處實拍細節」可切換同一位置的渲染方式。「對照原照」會打開鄰近拍攝點的原始魚眼視圖。
+
+- **幾何與照片。** Oxford Spires 的三台相機共留下 18,546 張原始照片。這次使用含 872 張 1440 × 1080 已定位照片的處理版，將 292 次機載雷射掃描對到時間差 25 毫秒以內的相機。經點雲融合和 Poisson 重建，桌面版有 234,999 個三角面，內嵌來自 177 個視角的貼圖，檔案約 19.3 MiB。手機版使用 72,000 個三角面，約 6.35 MiB。
+- **清晰度與缺口。** 桌面版 77.23% 的三角面通過照片投影檢查，其餘使用鄰近色彩或中性灰。這個比例按三角面數計算。網頁會按位置和朝向從 110 個視角按需載入照片，利用模型深度排除被遮住的表面。當相機遠離來源，細節會淡回 GLB 的貼圖。人物、桌下、反光以及過曝窗外都還有失真。
+- **換位置的實測。** 從三台相機各取四張未用於貼圖或近景投影的照片。在同一相機位姿，以 400 × 300、垂直視角 66 度重投影成透視圖，計算全畫面灰階 SSIM。桌面網格單用貼圖平均 0.732，加上鄰近實拍後為 0.766。12 張中 10 張提升、1 張持平、1 張略降。這評估的是同場景新視角的外觀，幾何使用共同的雷射掃描。[逐張數據](room/christ-church-evaluation.csv)
+- **瀏覽器效能。** 390 × 844 的行動版視窗、370 × 498 的實際畫布，在桌面 Chromium 的 SwiftShader 軟體渲染環境，於「高窗與肖像」實測平均 12.3 FPS、P95 畫格間隔 116.7 ms。實體手機與桌機 GPU 的結果可在頁面按「測試幀率」量測。
+
+### 重建牛津場景
+
+將下列指令的工作目錄設在 repo 根目錄。影像、深度和模型衍生素材沿用 Oxford Spires Dataset 的 CC BY-NC-SA 4.0 授權。作者為 Yifu Tao、Miguel Ángel Muñoz-Bañón、Lintong Zhang、Jiahao Wang、Lanke Frank Tarimo Fu 與 Maurice Fallon。[資料集](https://dynamic.robots.ox.ac.uk/datasets/oxford-spires/) · [場景檔案](https://huggingface.co/datasets/ori-drs/oxford_spires_dataset/tree/main/sequences/2024-03-18-christ-church-03) · [授權](https://creativecommons.org/licenses/by-nc-sa/4.0/)
+
+```sh
+base=https://huggingface.co/datasets/ori-drs/oxford_spires_dataset/resolve/03f4382308333aa70c3253f12acd3fbf0c7c4a15/sequences/2024-03-18-christ-church-03/processed
+mkdir -p /tmp/oxford-spires
+for asset in colmap/images.zip colmap/transforms_colmap_scaled.json vilens-slam/undist-clouds.zip; do
+  curl --fail --location --retry 3 "$base/$asset" -o "/tmp/oxford-spires/$(basename "$asset")"
+done
+python -m pip install -r room/full-requirements.txt scikit-image==0.25.2
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=4 python scripts/build_christ_church.py /tmp/oxford-spires room/site/christ-church /tmp/oxford-spires/cache
+python scripts/evaluate_christ_church.py /tmp/oxford-spires room/site/christ-church room/christ-church-evaluation.csv
+(cd room && npm ci && npm run build)
+```
+
+## Redwood 臥室
 
 **[開啟全室剖視](https://clarencechien.github.io/teslarvpoc/) · [走進房間](https://clarencechien.github.io/teslarvpoc/#walk) · [平面俯視](https://clarencechien.github.io/teslarvpoc/#plan) · [下載全室 GLB](https://clarencechien.github.io/teslarvpoc/bedroom-full.glb)**
 
