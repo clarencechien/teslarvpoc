@@ -10,12 +10,12 @@
   <section class="stage" aria-label="牛津基督堂互動模型">
     <canvas id="view" tabindex="0" aria-label="拖曳環顧，用方向鍵移動"></canvas>
     <img id="reference" alt="這個拍攝點的原始魚眼照片" hidden>
-    <nav aria-label="視圖"><button id="walk" aria-pressed="true">室內漫遊</button><button id="overview" aria-pressed="false">全區剖視</button><button id="compare" aria-pressed="false">對照原照</button></nav>
+    <nav aria-label="視圖"><button id="walk" aria-pressed="true">室內漫遊</button><button id="game" aria-pressed="false">遊戲重繪</button><button id="overview" aria-pressed="false">全區剖視</button><button id="compare" aria-pressed="false">對照原照</button></nav>
     <div class="loading" id="loading" role="status">正在載入大廳模型…</div>
     <div class="pad" id="pad" aria-label="移動"><button data-key="KeyW" aria-label="前進">↑</button><button data-key="KeyA" aria-label="左移">←</button><button data-key="KeyS" aria-label="後退">↓</button><button data-key="KeyD" aria-label="右移">→</button></div>
     <span id="caption"></span>
   </section>
   <section class="control"><h2>拍攝位置</h2><div id="stations"></div></section>
   <div class="notes"><p id="help" aria-live="polite">拖曳環顧，用方向鍵或 WASD 移動。</p><label><input type="checkbox" id="detail" checked> 疊加近處實拍細節</label><button id="bench">測試幀率</button></div>
-  <footer><span>Oxford Spires Dataset · Yifu Tao 等人。依實拍照片與雷射掃描重建。</span><a href="./step-surfaces.jpg">踏面原照與修正前後 ↗</a><a href="https://dynamic.robots.ox.ac.uk/datasets/oxford-spires/">資料來源 ↗</a><a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0 ↗</a><a href="./christ-church.glb?v=treads1" download>下載模型 ↓</a></footer>
-</main><script type="module" src="./viewer.js?v=treads1"></script></body></html>
+  <footer><span>Oxford Spires Dataset · Yifu Tao 等人。依實拍照片與雷射掃描重建。</span><a href="./game-comparison.webp">遊戲重繪與實拍 ↗</a><a href="./step-surfaces.jpg">踏面原照與修正前後 ↗</a><a href="https://dynamic.robots.ox.ac.uk/datasets/oxford-spires/">資料來源 ↗</a><a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0 ↗</a><a href="./christ-church.glb?v=treads1" download>下載模型 ↓</a></footer>
+</main><script type="module" src="./viewer.js?v=game1"></script></body></html>
