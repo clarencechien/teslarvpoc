@@ -247,6 +247,13 @@ def bake_mobile(out, archive, points, faces, frames, visibility_maps, survey):
 
 
 def run(data, out, cache):
+    from church_steps import refine_stairs
+
+    build_base(data, out, cache)
+    refine_stairs(data, out)
+
+
+def build_base(data, out, cache):
     cache.mkdir(exist_ok=True, parents=True)
     out.mkdir(exist_ok=True, parents=True)
     frames = sorted(
@@ -291,6 +298,7 @@ def run(data, out, cache):
     bake_mobile(out, archive, points, faces, selected, maps, survey)
     write_views(out, archive, maps, cameras)
     maps.archive.close()
+    archive.close()
     stats = dict(
         keyframes=len(frames),
         textureViews=len(set(labels[labels >= 0])),

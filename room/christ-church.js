@@ -56,7 +56,7 @@ function photoProjection(material) {
 
 async function fetchDetail(view) {
   if(cache.has(view.id)) return cache.get(view.id);
-  const pair=await Promise.allSettled([textureLoader.loadAsync('photo-'+view.id+'.webp'),textureLoader.loadAsync('depth-'+view.id+'.png?v=survey1')]);
+  const pair=await Promise.allSettled([textureLoader.loadAsync('photo-'+view.id+'.webp'),textureLoader.loadAsync('depth-'+view.id+'.png?v=treads1')]);
   if(pair.some(result=>result.status==='rejected')){
     for(const result of pair) if(result.status==='fulfilled') result.value.dispose();
     throw new Error('照片讀取失敗');
@@ -220,8 +220,8 @@ async function start(){
   const compact=window.matchMedia('(max-width: 680px)').matches;
   const modelFile=compact?'christ-church-mobile.glb':'christ-church.glb';
   const [data,gltf]=await Promise.all([
-    fetch('./scene.json?v=survey1').then(r=>{if(!r.ok)throw Error();return r.json();}),
-    new GLTFLoader().loadAsync('./'+modelFile+'?v=survey1',event=>{
+    fetch('./scene.json?v=treads1').then(r=>{if(!r.ok)throw Error();return r.json();}),
+    new GLTFLoader().loadAsync('./'+modelFile+'?v=treads1',event=>{
       if(event.lengthComputable) $('loading').textContent='正在載入大廳模型 '+Math.min(99,Math.round(100*event.loaded/event.total))+'%';
     })
   ]);
