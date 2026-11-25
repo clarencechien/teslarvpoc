@@ -1,0 +1,5 @@
+version,device,local_hits,local_within_8cm,median_local_error_m,through_rays,through_blocked,stair_rays,stair_within_12cm,stair_early_30cm,stair_no_return
+before,desktop,63023,51039,0.02851,71789,2964,324505,286118,7498,1570
+before,mobile,63023,51018,0.02866,71789,2384,324505,286584,5914,1922
+after,desktop,63023,51319,0.02253,71789,667,324505,287217,4704,1676
+after,mobile,63023,50942,0.02332,71789,562,324505,286733,3734,2091

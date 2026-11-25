@@ -64,7 +64,7 @@ function photoProjection(material) {
 
 async function fetchDetail(view) {
   if(cache.has(view.id)) return cache.get(view.id);
-  const pair=await Promise.allSettled([textureLoader.loadAsync('photo-'+view.id+'.webp'),textureLoader.loadAsync('depth-'+view.id+'.png?v=treads1')]);
+  const pair=await Promise.allSettled([textureLoader.loadAsync('photo-'+view.id+'.webp'),textureLoader.loadAsync('depth-'+view.id+'.png?v=railrepair1')]);
   if(pair.some(result=>result.status==='rejected')){
     for(const result of pair) if(result.status==='fulfilled') result.value.dispose();
     throw new Error('照片讀取失敗');
@@ -262,7 +262,7 @@ async function start(){
   new ResizeObserver(resize).observe(canvas);resize();
   const compact=window.matchMedia('(max-width: 680px)').matches;
   const modelFile=compact?'christ-church-mobile.glb':'christ-church.glb';
-  const data=await fetch('./scene.json?v=treads1').then(r=>{if(!r.ok)throw Error();return r.json();});
+  const data=await fetch('./scene.json?v=railrepair1').then(r=>{if(!r.ok)throw Error();return r.json();});
   views=data.views;
   grid=data.walkGrid;
   const bytes=Uint8Array.from(atob(grid.heights),c=>c.charCodeAt(0));
@@ -275,7 +275,7 @@ async function start(){
   }
   model={materials:[]};
   async function loadScan() {
-    const gltf=await new GLTFLoader().loadAsync('./'+modelFile+'?v=treads1');
+    const gltf=await new GLTFLoader().loadAsync('./'+modelFile+'?v=railrepair1');
     gltf.scene.traverse(obj=>{
       if(!obj.isMesh)return;
       const mat=obj.material;
@@ -327,6 +327,19 @@ async function start(){
       selectDetail();canvas.focus({preventScroll:true});
     });
   }
+  function railSideView(){
+    activate('scan',()=>{
+      routeOpen=false;$('detail').checked=false;setMode('walk');
+      positionAt(views.find(v=>v.id===199));
+      camera.lookAt(2.28,-3.19,-16.55);
+      turn.setFromQuaternion(camera.quaternion,'YXZ');highlight(null);railButton.setAttribute('aria-pressed','true');
+      $('caption').textContent='欄杆側視';
+      $('help').textContent='目前顯示模型內建貼圖，可左右移動檢查欄孔，也可勾選近景實拍。';
+      selectDetail();canvas.focus({preventScroll:true});
+    });
+  }
+  const railButton=document.createElement('button');
+  railButton.textContent='欄杆側視';railButton.onclick=railSideView;$('stations').append(railButton);
   $('photo-route').onclick=()=>openPhotoStop(0);
   $('prev-photo').onclick=()=>openPhotoStop(stopIndex-1);
   $('next-photo').onclick=()=>openPhotoStop(stopIndex+1);
@@ -381,7 +394,8 @@ async function start(){
     button.onlostpointercapture=()=>keys.delete(button.dataset.key);
   }
   current=views.find(v=>v.id===(location.hash==='#photo-stairs'||location.hash==='#stairs-up'||location.hash==='#game-stairs'?198:21));
-  if(location.hash==='#photo-stairs')openPhotoStop(0);
+  if(location.hash==='#rail-repair')railSideView();
+  else if(location.hash==='#photo-stairs')openPhotoStop(0);
   else if(location.hash==='#game-stairs')enterGame();
   else activate('scan',()=>station(current));
   requestAnimationFrame(step);

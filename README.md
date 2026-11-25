@@ -6,6 +6,16 @@
 
 進入後拖曳環顧，用方向鍵、WASD 或觸控方向鈕在拍攝走道附近移動。五個拍攝點可直接跳到大廳或樓梯。[石階仰視](https://clarencechien.github.io/teslarvpoc/christ-church/#stairs-up) 可從下方看窗邊平台。「全區剖視」可看兩個空間如何連通。「疊加近處實拍細節」可切換同一位置的渲染方式。「對照原照」會打開鄰近拍攝點的原始魚眼視圖。
 
+### 樓梯欄杆局部修補
+
+[從欄杆側視開始](https://clarencechien.github.io/teslarvpoc/christ-church/#rail-repair) · [看雷射剖面、修補前後與橫移對照](https://clarencechien.github.io/teslarvpoc/christ-church/rail-repair.webp)
+
+舊模型的側面有些看似完整的欄孔，其實是照片畫在一片連續三角面上。橫向移動時，孔後方的窗戶便會跟著石材移動。新版先從固定式雷射的側面剖面選定三段欄杆及下緣，保留下方的連續石板。範圍內的柱身、扶手和拱形開口由程式重建。它在 1.6 公分格網上估計表面距離，以 Marching Cubes 擷取表面，濾除遠離掃描點的面與孤立碎片，再從 67 張已標定照片中為每個可見位置選取最多三張上色。缺少直接照片的貼圖像素由鄰近、朝向相近的表面取色。桌面和手機的 GLB 都含有修補後的網格與貼圖。[修補程式](scripts/church_rail_repair.py)
+
+以移動式雷射複核，71,789 條實測穿過欄杆範圍的射線中，桌面模型提早擋住的數量從 2,964 降到 667，手機從 2,384 降到 562。在 63,023 條打中局部表面的射線上，桌面的距離誤差中位數從 2.85 降到 2.25 公分。代價是整個樓梯區 324,505 條射線中，桌面完全沒碰到模型的從 1,570 增到 1,676。細欄柱邊緣仍有鋸齒，其他牆角仍可見舊模型的裂面。[量測結果](room/christ-church-rail-audit.csv) · [檢查程式](scripts/audit_church_rails.py)
+
+另以 5 個未參與照片投影的相機位置檢查外觀。相同瀏覽器視角的平均灰階 SSIM 從 0.832 升到 0.843。關閉近景投影，對第 198 幀的正面石階原照，網格貼圖的 SSIM 從 0.630 升到 0.660。橫移 55 公分的對照圖只用來比較兩個模型，該位置沒有配對照片。[瀏覽器逐張數據](room/christ-church-photowalk.csv)
+
 ### 石階實拍路線
 
 [從第一個實拍位置開始](https://clarencechien.github.io/teslarvpoc/christ-church/#photo-stairs) · [直接看留出照片位置的合成視角](https://clarencechien.github.io/teslarvpoc/christ-church/#stairs-up) · [看同角度與橫移對照](https://clarencechien.github.io/teslarvpoc/christ-church/photo-walk-comparison.webp)
@@ -14,7 +24,7 @@
 
 樓梯有 67 組已標定的位置與方向。瀏覽器依觀看位置和朝向選取最多四張照片，從固定雷射點生成的深度格網補充原網格缺少的表面，在深度斷層處斷開三角形。以量測距離、照片邊緣、視差及多張照片的色彩一致性加權。離線使用 YOLOX 將偵測到的行人區域從跨視角投影中排除，停在實拍點仍可看到當時拍到的人。人物邊緣、細欄杆和被遮住的背景仍可能留有淡影或缺口。[重建程式](scripts/build_church_photowalk.py) · [OpenCV Zoo 人物偵測模型](https://huggingface.co/opencv/object_detection_yolox)
 
-在相同瀏覽器視角比對 5 張未用於投影的照片（含另外兩台相機）。灰階 SSIM 平均從單張近照投影的 0.797 提高到 0.832。以石階仰視第 198 幀為例，遊戲重繪為 0.514、單張投影為 0.707、多視角合成為 0.755。畫面為 758 × 456，計分時去除外圈 5 像素。這組結果衡量照片外觀，涵蓋同一採集路線附近的視角。[逐張數據](room/christ-church-photowalk.csv)
+在欄杆修補前，以相同瀏覽器視角比對 5 張未用於投影的照片（含另外兩台相機）。灰階 SSIM 平均從單張近照投影的 0.797 提高到 0.832。以石階仰視第 198 幀為例，遊戲重繪為 0.514、單張投影為 0.707、多視角合成為 0.755。畫面為 758 × 456，計分時去除外圈 5 像素。這組結果衡量照片外觀，涵蓋同一採集路線附近的視角。[逐張數據](room/christ-church-photowalk.csv)
 
 ### 石階遊戲重繪
 
@@ -32,7 +42,7 @@
 
 關閉近景照片疊加，取未參與踏面貼圖的前相機第 198 幀，把原照校正到與漫遊入口相同的視角。570 × 335 全畫面灰階 SSIM 從 0.591 提高到 0.630，樓梯所占的畫面下半部從 0.605 提高到 0.686。向右橫移 55 公分後仍可見連續踏面，該位置無配對照片。另以 12 張預留照片測整體外觀，本版平均為 0.734，開啟疊加後為 0.785。[比較圖產生程式](scripts/compare_church_stairs.py) · [逐張外觀數據](room/christ-church-evaluation.csv)
 
-桌面版沿樓梯區 324,505 條有效雷射光線檢查，落在量測距離 12 公分內的比例從 88.15% 到 88.17%。無交點從 0.60% 降到 0.48%，但比量測晚 30 公分以上才碰到模型的光線從 4.98% 增到 5.41%。這一輪主要改善踏面的視覺連續性。最終網格為桌面 404,353 個、手機 178,057 個三角面。[逐幀距離數據](room/christ-church-geometry.csv)
+桌面版沿樓梯區 324,505 條有效雷射光線檢查，落在量測距離 12 公分內的比例從 88.15% 到 88.17%。無交點從 0.60% 降到 0.48%，但比量測晚 30 公分以上才碰到模型的光線從 4.98% 增到 5.41%。這一輪主要改善踏面的視覺連續性。踏面修補完成時的網格為桌面 404,353 個、手機 178,057 個三角面。[逐幀距離數據](room/christ-church-geometry.csv)
 
 ### 前一輪修正：石階上的懸浮塊
 
@@ -83,7 +93,11 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=4 python scripts/build_christ_church.py /
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=4 python scripts/build_church_game.py /tmp/oxford-spires room/site/christ-church
 curl --fail --location 'https://huggingface.co/opencv/object_detection_yolox/resolve/78c368f74ce73ee28fc7a1be418a598c71b58b52/object_detection_yolox_2022nov.onnx' -o /tmp/oxford-spires/yolox.onnx
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=4 python scripts/build_church_photowalk.py /tmp/oxford-spires room/site/christ-church /tmp/oxford-spires/yolox.onnx
-python scripts/evaluate_christ_church.py /tmp/oxford-spires room/site/christ-church room/christ-church-evaluation.csv
+mkdir -p /tmp/oxford-spires/before-rails
+cp room/site/christ-church/christ-church{,-mobile}.glb /tmp/oxford-spires/before-rails/
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=4 python scripts/church_rail_repair.py /tmp/oxford-spires room/site/christ-church /tmp/oxford-spires/cache
+python scripts/audit_church_rails.py /tmp/oxford-spires /tmp/oxford-spires/before-rails room/site/christ-church /tmp/current-rail-audit.csv
+python scripts/evaluate_christ_church.py /tmp/oxford-spires room/site/christ-church /tmp/current-appearance.csv
 python scripts/audit_church_geometry.py /tmp/oxford-spires /tmp/current-depth.csv room/site/christ-church/christ-church{,-mobile}.glb
 (cd room && npm ci && npm run build)
 ```

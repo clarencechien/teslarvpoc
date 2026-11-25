@@ -107,6 +107,10 @@ def clip_box(points, triangles, attributes, bounds):
             [0, slope, -1, 0.42 + intercept],
         ]
     )
+    return subtract_prism(points, triangles, attributes, planes)
+
+
+def subtract_prism(points, triangles, attributes, planes):
     margin = points @ planes[:, :3].T + planes[:, 3]
     distances = margin[triangles]
     outside = (distances.max(1) < 0).any(1)
@@ -152,7 +156,7 @@ def clip_box(points, triangles, attributes, bounds):
     return points[used], local.reshape(-1, 3), attributes[used]
 
 
-def read_primitives(path):
+def read_primitives(path, *, trim_flights=True):
     from build_christ_church import UP
 
     raw = path.read_bytes()
@@ -175,8 +179,9 @@ def read_primitives(path):
         tri = attr(group["indices"], "<u4", 3)
         key = "TEXCOORD_0" if "TEXCOORD_0" in attrs else "COLOR_0"
         data = attr(attrs[key], "<f4", 2 if key == "TEXCOORD_0" else 3)
-        for bounds in FLIGHTS:
-            points, tri, data = clip_box(points, tri, data, bounds)
+        if trim_flights:
+            for bounds in FLIGHTS:
+                points, tri, data = clip_box(points, tri, data, bounds)
         if len(tri):
             groups.append((group["material"], key, points, tri, data))
     photos = [bytes(view(img["bufferView"])) for img in doc["images"]]
