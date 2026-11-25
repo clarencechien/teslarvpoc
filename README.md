@@ -6,6 +6,16 @@
 
 進入後拖曳環顧，用方向鍵、WASD 或觸控方向鈕在拍攝走道附近移動。五個拍攝點可直接跳到大廳或樓梯。[石階仰視](https://clarencechien.github.io/teslarvpoc/christ-church/#stairs-up) 可從下方看窗邊平台。「全區剖視」可看兩個空間如何連通。「疊加近處實拍細節」可切換同一位置的渲染方式。「對照原照」會打開鄰近拍攝點的原始魚眼視圖。
 
+### 石階實拍路線
+
+[從第一個實拍位置開始](https://clarencechien.github.io/teslarvpoc/christ-church/#photo-stairs) · [直接看留出照片位置的合成視角](https://clarencechien.github.io/teslarvpoc/christ-church/#stairs-up) · [看同角度與橫移對照](https://clarencechien.github.io/teslarvpoc/christ-church/photo-walk-comparison.webp)
+
+用拍攝點旁的左右箭頭走過 12 個真實相機位置。第一站可以看到前方平台和石階上的窗光。到站後在原相機的視野內依鏡頭標定顯示該張實拍；拖曳可環顧，用 WASD、方向鍵或右下角按鈕可自由離開路線。相機中心以外，近景照片依雷射距離補償視差，隨距離逐步切換為多視角合成。關閉「疊加近景實拍」可檢查底層網格。
+
+樓梯有 67 組已標定的位置與方向。瀏覽器依觀看位置和朝向選取最多四張照片，從固定雷射點生成的深度格網補充原網格缺少的表面，在深度斷層處斷開三角形。以量測距離、照片邊緣、視差及多張照片的色彩一致性加權。離線使用 YOLOX 將偵測到的行人區域從跨視角投影中排除，停在實拍點仍可看到當時拍到的人。人物邊緣、細欄杆和被遮住的背景仍可能留有淡影或缺口。[重建程式](scripts/build_church_photowalk.py) · [OpenCV Zoo 人物偵測模型](https://huggingface.co/opencv/object_detection_yolox)
+
+在相同瀏覽器視角比對 5 張未用於投影的照片（含另外兩台相機）。灰階 SSIM 平均從單張近照投影的 0.797 提高到 0.832。以石階仰視第 198 幀為例，遊戲重繪為 0.514、單張投影為 0.707、多視角合成為 0.755。畫面為 758 × 456，計分時去除外圈 5 像素。這組結果衡量照片外觀，涵蓋同一採集路線附近的視角。[逐張數據](room/christ-church-photowalk.csv)
+
 ### 石階遊戲重繪
 
 [進入遊戲版石階](https://clarencechien.github.io/teslarvpoc/christ-church/#game-stairs) · [同視角實拍、實測網格與遊戲重繪](https://clarencechien.github.io/teslarvpoc/christ-church/game-comparison.webp)
@@ -71,6 +81,8 @@ curl --fail --location --retry 3 "$dataset/ground_truth_map/christ-church/merged
 python -m pip install -r room/full-requirements.txt scikit-image==0.25.2
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=4 python scripts/build_christ_church.py /tmp/oxford-spires room/site/christ-church /tmp/oxford-spires/cache
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=4 python scripts/build_church_game.py /tmp/oxford-spires room/site/christ-church
+curl --fail --location 'https://huggingface.co/opencv/object_detection_yolox/resolve/78c368f74ce73ee28fc7a1be418a598c71b58b52/object_detection_yolox_2022nov.onnx' -o /tmp/oxford-spires/yolox.onnx
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=4 python scripts/build_church_photowalk.py /tmp/oxford-spires room/site/christ-church /tmp/oxford-spires/yolox.onnx
 python scripts/evaluate_christ_church.py /tmp/oxford-spires room/site/christ-church room/christ-church-evaluation.csv
 python scripts/audit_church_geometry.py /tmp/oxford-spires /tmp/current-depth.csv room/site/christ-church/christ-church{,-mobile}.glb
 (cd room && npm ci && npm run build)

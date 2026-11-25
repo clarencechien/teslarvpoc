@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
 import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
 
+import {PhotoWalk} from './church-photowalk.js';
 import {createChurchGame, inChurchGame} from './church-game.js';
 
 const $ = id => document.getElementById(id);
@@ -20,8 +21,11 @@ const uniform = {
 };
 let renderer, controls, views, grid, current, model, mode='walk', dirty=true, ready=false;
 let detailView, pending, generation=0, lastTime=0, lastSelection=0, drag, benchmark;
+let photoWalk, photoWalkLoad, photoWalkRetry=0;
 let gameScene, scanLoad, gameLoad, action=0, photoReturn;
 const strolling=()=>mode==='walk'||mode==='game';
+const photoStops=[197,199,200,201,202,204,205,206,207,208,209,210];
+let stopIndex=0,routeOpen=false;
 const cache = new Map();
 const textureLoader = new THREE.TextureLoader();
 
@@ -84,8 +88,26 @@ function releaseCache(keep) {
   }
 }
 
+function selectPhotoWalk(){
+  const {x,z}=camera.position;
+  const requested=mode==='walk' && $('detail').checked && z < -8 && z > -22 && x > -5 && x < 9;
+  if(photoWalk)photoWalk.enabled=requested;
+  if(!requested){canvas.dataset.photowalk='off';return;}
+  if(!photoWalk){
+    if(!photoWalkLoad && performance.now()>=photoWalkRetry){
+      photoWalkLoad=PhotoWalk.create(views,()=>{dirty=true;}).then(walk=>{
+        photoWalk=walk;selectPhotoWalk();dirty=true;
+      }).catch(()=>{photoWalkRetry=performance.now()+3000;}).finally(()=>{photoWalkLoad=null;});
+    }
+    canvas.dataset.photowalk='loading';return;
+  }
+  photoWalk.select(camera);
+  canvas.dataset.photowalk=photoWalk.active.length?'ready':'loading';
+}
+
 function selectDetail(){
-  if(mode!=='walk'||!$('detail').checked){uniform.churchGain.value=0;return;}
+  selectPhotoWalk();
+  if(mode!=='walk'||!$('detail').checked||(photoWalk?.enabled&&photoWalk.active.length)){uniform.churchGain.value=0;return;}
   const direction=camera.getWorldDirection(tmp);
   let best,lowest=Infinity;
   for(const view of views){
@@ -110,6 +132,8 @@ function selectDetail(){
 
 function setMode(next) {
   mode=next;
+  if(photoWalk)photoWalk.enabled=false;
+  canvas.dataset.photowalk='off';
   benchmark=null;
   uniform.churchLift.value=next==='overview'?1:0;
   camera.fov=next==='overview'?38:70;
@@ -118,6 +142,7 @@ function setMode(next) {
   keys.clear();
   controls.enabled=next==='overview';
   $('pad').hidden=!strolling();
+  $('photo-stops').hidden=next!=='walk'||!routeOpen;
   $('reference').hidden=next!=='compare';
   $('detail').disabled=next!=='walk';
   $('bench').disabled=next==='compare';
@@ -128,18 +153,18 @@ function setMode(next) {
   dirty=true;
 }
 
-function positionAt(view) {
+function positionAt(view,lookUp=false) {
   current=view;
   camera.position.copy(view.position);
   turn.setFromRotationMatrix(view.matrix,'YXZ');turn.z=0;
-  if(view.id===198) turn.x+=.24;
+  if(view.id===198||lookUp) turn.x+=.24;
   camera.quaternion.setFromEuler(turn);
   $('caption').textContent=view.name||'鄰近拍攝點';
   highlight(view);
 }
 
 function station(view) {
-  setMode('walk');positionAt(view);
+  routeOpen=false;setMode('walk');positionAt(view);
   selectDetail();
   canvas.focus({preventScroll:true});
 }
@@ -180,7 +205,7 @@ function constrain(x,z){
     height=cm*.01;
   }
   camera.position.set(x,height,z);
-  $('caption').textContent=mode==='game'?'遊戲重繪 · 石階':'室內漫遊';highlight(null);
+  $('caption').textContent=mode==='game'?'遊戲重繪 · 石階':routeOpen?'自由移動 · 合成視角':'室內漫遊';highlight(null);
 }
 
 function step(time){
@@ -211,7 +236,12 @@ function step(time){
     }
   }
   if(time-lastSelection>140){selectDetail();lastSelection=time;}
-  if(dirty&&mode!=='compare'){renderer.render(mode==='game'?gameScene:scene,camera);dirty=false;}
+  if(dirty&&mode!=='compare'){
+    if(mode==='walk'&&photoWalk?.enabled&&photoWalk.active.length){
+      uniform.churchGain.value=0;photoWalk.render(renderer,camera,scene);
+    }else renderer.render(mode==='game'?gameScene:scene,camera);
+    dirty=false;
+  }
 }
 
 async function start(){
@@ -285,6 +315,21 @@ async function start(){
     button.textContent=view.name;button.dataset.id=view.id;button.onclick=()=>activate('scan',()=>station(view));
     $('stations').append(button);
   }
+  function openPhotoStop(index){
+    activate('scan',()=>{
+      routeOpen=true;stopIndex=THREE.MathUtils.clamp(index,0,photoStops.length-1);
+      const view=views.find(v=>v.id===photoStops[stopIndex]);
+      $('detail').checked=true;setMode('walk');positionAt(view,true);
+      $('caption').textContent='實拍位置 '+(stopIndex+1)+' / '+photoStops.length;
+      $('prev-photo').disabled=stopIndex===0;$('next-photo').disabled=stopIndex===photoStops.length-1;
+      $('photo-progress').textContent=(stopIndex+1)+' / '+photoStops.length;
+      $('help').textContent='前後拍攝點可看實拍細節。用方向鍵離開拍攝點，可看合成視角。';
+      selectDetail();canvas.focus({preventScroll:true});
+    });
+  }
+  $('photo-route').onclick=()=>openPhotoStop(0);
+  $('prev-photo').onclick=()=>openPhotoStop(stopIndex-1);
+  $('next-photo').onclick=()=>openPhotoStop(stopIndex+1);
   $('game').onclick=enterGame;
   $('walk').onclick=()=>activate('scan',()=>{
     if(mode==='game'){
@@ -298,6 +343,8 @@ async function start(){
     if(mode==='compare'){
       if(photoReturn==='game'){
         setMode('game');$('caption').textContent='遊戲重繪 · 石階';
+      }else if(photoReturn==='walk'&&routeOpen){
+        setMode('walk');$('caption').textContent='實拍路線';selectDetail();
       }else station(current);
       return;
     }
@@ -333,8 +380,9 @@ async function start(){
     button.onpointerdown=e=>{button.setPointerCapture(e.pointerId);keys.add(button.dataset.key);};
     button.onlostpointercapture=()=>keys.delete(button.dataset.key);
   }
-  current=views.find(v=>v.id===(location.hash==='#stairs-up'||location.hash==='#game-stairs'?198:21));
-  if(location.hash==='#game-stairs')enterGame();
+  current=views.find(v=>v.id===(location.hash==='#photo-stairs'||location.hash==='#stairs-up'||location.hash==='#game-stairs'?198:21));
+  if(location.hash==='#photo-stairs')openPhotoStop(0);
+  else if(location.hash==='#game-stairs')enterGame();
   else activate('scan',()=>station(current));
   requestAnimationFrame(step);
 }

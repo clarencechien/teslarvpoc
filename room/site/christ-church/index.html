@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#f3f0e8"><link rel="icon" href="data:,">
-  <title>牛津基督堂大廳 · Oxford Spires</title><link rel="stylesheet" href="./style.css">
+  <title>牛津基督堂大廳 · Oxford Spires</title><link rel="stylesheet" href="./style.css?v=photowalk1">
 </head>
 <body><main>
   <header><div><p lang="en">Oxford Spires / Christ Church</p><h1>牛津基督堂大廳</h1></div><a href="../">返回臥室展示 ↗</a></header>
@@ -15,7 +15,7 @@
     <div class="pad" id="pad" aria-label="移動"><button data-key="KeyW" aria-label="前進">↑</button><button data-key="KeyA" aria-label="左移">←</button><button data-key="KeyS" aria-label="後退">↓</button><button data-key="KeyD" aria-label="右移">→</button></div>
     <span id="caption"></span>
   </section>
-  <section class="control"><h2>拍攝位置</h2><div id="stations"></div></section>
-  <div class="notes"><p id="help" aria-live="polite">拖曳環顧，用方向鍵或 WASD 移動。</p><label><input type="checkbox" id="detail" checked> 疊加近處實拍細節</label><button id="bench">測試幀率</button></div>
-  <footer><span>Oxford Spires Dataset · Yifu Tao 等人。依實拍照片與雷射掃描重建。</span><a href="./game-comparison.webp">遊戲重繪與實拍 ↗</a><a href="./step-surfaces.jpg">踏面原照與修正前後 ↗</a><a href="https://dynamic.robots.ox.ac.uk/datasets/oxford-spires/">資料來源 ↗</a><a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0 ↗</a><a href="./christ-church.glb?v=treads1" download>下載模型 ↓</a></footer>
-</main><script type="module" src="./viewer.js?v=game1"></script></body></html>
+  <section class="control"><h2>拍攝位置</h2><div id="stations"></div><button id="photo-route">石階實拍路線</button><div id="photo-stops" role="group" aria-label="實拍位置" hidden><button id="prev-photo" aria-label="上一個拍攝點">←</button><output id="photo-progress"></output><button id="next-photo" aria-label="下一個拍攝點">→</button></div></section>
+  <div class="notes"><p id="help" aria-live="polite">拖曳環顧，用方向鍵或 WASD 移動。</p><label><input type="checkbox" id="detail" checked> 疊加近景實拍（樓梯使用多視角）</label><button id="bench">測試幀率</button></div>
+  <footer><span>Oxford Spires Dataset · Yifu Tao 等人。依實拍照片與雷射掃描重建。</span><a href="./photo-walk-comparison.webp">實拍、重繪與合成對照 ↗</a><a href="./step-surfaces.jpg">踏面原照與修正前後 ↗</a><a href="https://dynamic.robots.ox.ac.uk/datasets/oxford-spires/">資料來源 ↗</a><a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0 ↗</a><a href="./christ-church.glb?v=treads1" download>下載模型 ↓</a></footer>
+</main><script type="module" src="./viewer.js?v=photowalk1"></script></body></html>
