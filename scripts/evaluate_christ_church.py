@@ -63,7 +63,7 @@ def sample(img, x, y):
     return np.concatenate(rows).reshape(shape + (img.shape[2],))
 
 
-def render(scene, materials, frame, width=400, height=300, vertical_fov=66):
+def render(scene, materials, frame, width=400, height=300, vertical_fov=66, *, with_hits=False):
     u, v = np.meshgrid(np.arange(width) + 0.5 - width / 2, np.arange(height) + 0.5 - height / 2)
     focal = height / (2 * np.tan(np.deg2rad(vertical_fov / 2)))
     local = np.stack([u, -v, -np.full_like(u, focal)], axis=-1)
@@ -98,7 +98,8 @@ def render(scene, materials, frame, width=400, height=300, vertical_fov=66):
             base[mask] = np.clip(srgb[:, ::-1] * 255, 0, 255).astype("u1")
     # Source pixels for the same undistorted perspective rays.
     u, v, _ = project((origin + rays).reshape(-1, 3), frame)
-    return base, xyz, valid, u.reshape(height, width), v.reshape(height, width)
+    result = base, xyz, valid, u.reshape(height, width), v.reshape(height, width)
+    return (*result, ids, tri) if with_hits else result
 
 
 def smoothstep(a, b, x):

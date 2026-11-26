@@ -1,0 +1,30 @@
+{
+  "christ-church.glb": {
+    "proposed": {
+      "views": 147,
+      "removed": 2058,
+      "added": 1250,
+      "retextured": 2104
+    },
+    "applied": {
+      "removed": 338,
+      "added": 204,
+      "retextured": 110
+    },
+    "reviewCameras": 149
+  },
+  "christ-church-mobile.glb": {
+    "proposed": {
+      "views": 147,
+      "removed": 573,
+      "added": 189,
+      "retextured": 744
+    },
+    "applied": {
+      "removed": 81,
+      "added": 16,
+      "retextured": 34
+    },
+    "reviewCameras": 149
+  }
+}

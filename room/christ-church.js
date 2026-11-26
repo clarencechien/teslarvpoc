@@ -64,7 +64,7 @@ function photoProjection(material) {
 
 async function fetchDetail(view) {
   if(cache.has(view.id)) return cache.get(view.id);
-  const pair=await Promise.allSettled([textureLoader.loadAsync('photo-'+view.id+'.webp'),textureLoader.loadAsync('depth-'+view.id+'.png?v=railrepair1')]);
+  const pair=await Promise.allSettled([textureLoader.loadAsync('photo-'+view.id+'.webp'),textureLoader.loadAsync('depth-'+view.id+'.png?v=cleanup1')]);
   if(pair.some(result=>result.status==='rejected')){
     for(const result of pair) if(result.status==='fulfilled') result.value.dispose();
     throw new Error('照片讀取失敗');
@@ -262,7 +262,7 @@ async function start(){
   new ResizeObserver(resize).observe(canvas);resize();
   const compact=window.matchMedia('(max-width: 680px)').matches;
   const modelFile=compact?'christ-church-mobile.glb':'christ-church.glb';
-  const data=await fetch('./scene.json?v=railrepair1').then(r=>{if(!r.ok)throw Error();return r.json();});
+  const data=await fetch('./scene.json?v=cleanup1').then(r=>{if(!r.ok)throw Error();return r.json();});
   views=data.views;
   grid=data.walkGrid;
   const bytes=Uint8Array.from(atob(grid.heights),c=>c.charCodeAt(0));
@@ -275,7 +275,7 @@ async function start(){
   }
   model={materials:[]};
   async function loadScan() {
-    const gltf=await new GLTFLoader().loadAsync('./'+modelFile+'?v=railrepair1');
+    const gltf=await new GLTFLoader().loadAsync('./'+modelFile+'?v=cleanup1');
     gltf.scene.traverse(obj=>{
       if(!obj.isMesh)return;
       const mat=obj.material;

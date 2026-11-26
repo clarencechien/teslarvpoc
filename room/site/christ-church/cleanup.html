@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>重建修補對照 · 牛津基督堂</title><link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./style.css">
+  <style>
+    main{max-width:1050px}.review{max-width:880px;margin:auto}.toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:.7em;margin:1em 0}
+    select{font:inherit;max-width:100%;padding:.45em;border:1px solid var(--line);color:var(--ink);background:var(--paper)}
+    figure{margin:0}.pair{position:relative;aspect-ratio:3/2;background:#282923;overflow:hidden;border-radius:5px}
+    .pair img{display:block;width:100%;height:100%;object-fit:contain}.layer,.divider,.tag{position:absolute;inset:0}
+    #old-layer{clip-path:inset(0 calc(100% - var(--split,50%)) 0 0)}.divider{inset:0 auto 0 var(--split,50%);width:2px;background:white}
+    .layer{overflow:hidden}.pair.zoom img{transform:scale(3);transform-origin:var(--focus,50% 50%)}
+    .pair [hidden]{display:none}.tag{inset:.7em auto auto .7em;color:white;background:#222c;padding:.27em .6em;border-radius:3px;font-size:.85em}.right{left:auto;right:.7em}
+    .range{display:flex;gap:1em;align-items:center;margin:.8em 0}.range input{flex:1;accent-color:#36483c}.meta{font-variant-numeric:tabular-nums;color:var(--muted)}footer{margin-top:2em}
+  </style>
+</head>
+<body><main>
+  <header><h1>自動修補前後對照</h1><a href="./#stairs-up">回到室內漫遊 ↗</a></header>
+  <div class="review">
+    <div class="toolbar"><label for="view">拍攝視角</label><select id="view"></select><label><input id="zoom" type="checkbox"> 放大改動處</label><label><input id="original" type="checkbox"> 顯示同角度實拍</label></div>
+    <figure>
+      <div class="pair" id="pair" aria-label="左右分割的修補前後網格畫面">
+        <div class="layer"><img id="after" alt="修補後的網格"></div><div class="layer" id="old-layer"><img id="before" alt="上一版網格"></div><span class="divider"></span>
+        <span class="tag">修補前</span><span class="tag right">修補後</span><div class="layer" id="ref-layer" hidden><img id="reference" alt="同一位置實拍照片"></div>
+      </div>
+      <label class="range">左右比較 <input id="split" type="range" min="0" max="100" value="50"></label>
+      <figcaption>兩版使用同一相機，關閉近景照片疊加。12 個實拍視角均未用於這輪貼圖。</figcaption>
+      <p class="meta" id="score" role="status"></p>
+    </figure>
+    <footer><a href="./cleanup-review.webp">下載比較圖</a><a href="./cleanup-review.json">逐項量測</a><a href="https://dynamic.robots.ox.ac.uk/datasets/oxford-spires/">Oxford Spires Dataset</a><a href="https://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a></footer>
+  </div>
+</main><script type="module">
+const byId=id=>document.getElementById(id);
+const selector=byId('view'), split=byId('split'), original=byId('original');
+function setSplit(){byId('pair').style.setProperty('--split',split.value+'%');}
+split.oninput=setSplit;
+byId('zoom').onchange=()=>byId('pair').classList.toggle('zoom',byId('zoom').checked);
+original.onchange=()=>{byId('ref-layer').hidden=!original.checked;split.disabled=original.checked;};
+try{
+  const response=await fetch('./cleanup-review.json');
+  if(!response.ok)throw Error();
+  const {photos}=await response.json();
+  let best=0;
+  for(const [index,row] of photos.entries()){
+    selector.add(new Option((row.frame<100?'大廳':'樓梯')+' · 相機 '+row.camera+' ／ 第 '+row.frame+' 幀',String(index)));
+    if(row.after-row.before>photos[best].after-photos[best].before)best=index;
+  }
+  function select(){
+    const row=photos[Number(selector.value)];
+    const origin=row.focus.map(value=>Math.max(0,Math.min(100,(3*value-.5)*50))+'%').join(' ');
+    byId('pair').style.setProperty('--focus',origin);
+    for(const label of ['before','after','reference'])byId(label).src='./cleanup-views/'+row.camera+'-'+row.frame+'-'+label+'.webp';
+    byId('score').textContent='全圖灰階 SSIM　修補前 '+row.before.toFixed(3)+'　修補後 '+row.after.toFixed(3);
+  }
+  selector.value=String(best);selector.onchange=select;select();setSplit();
+}catch{byId('score').textContent='無法載入比對資料，請重新整理。';}
+</script></body></html>

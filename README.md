@@ -6,6 +6,30 @@
 
 進入後拖曳環顧，用方向鍵、WASD 或觸控方向鈕在拍攝走道附近移動。五個拍攝點可直接跳到大廳或樓梯。[石階仰視](https://clarencechien.github.io/teslarvpoc/christ-church/#stairs-up) 可從下方看窗邊平台。「全區剖視」可看兩個空間如何連通。「疊加近處實拍細節」可切換同一位置的渲染方式。「對照原照」會打開鄰近拍攝點的原始魚眼視圖。
 
+### 全室自動清理與逐面複查
+
+[拖曳比較清理前後、放大改動處或查看原照](https://clarencechien.github.io/teslarvpoc/christ-church/cleanup.html) · [在樓梯實際漫遊](https://clarencechien.github.io/teslarvpoc/christ-church/#stairs-up)
+
+這輪從上一版完整的 GLB 開始，沿大廳、走道與樓梯的已標定拍攝路線搜尋。流程沿用原場景的座標和實測資料，新的清理步驟不必指定欄杆、牆面或家具的包圍盒。
+
+1. **巡查與清除**。從 147 個位置或朝向投射視線。若兩個相隔至少 35 公分的位置都顯示能看穿某個面、沒有觀測支持該面，且三角形偏離固定式雷射點，才提出移除。
+2. **局部補面**。尋找掃描顯示有表面、舊模型卻漏掉或命中遠處的區域。補片須貼近掃描點，從不同位置重投影後深度相符，且避開深度跳變。濾除孤立小片，每一批提案都會避開先前已補的位置。
+3. **修正貼圖**。從可見照片取色，排除行人遮擋，取另外兩張與候選相機相隔至少 35 公分的照片檢查色差。對原先已有照片的表面，再以附近朝向相近的面檢查新貼圖是否會引入色差。
+4. **逐面撤回**。另外 149 張實拍只用來檢查修改。程式用相同相機渲染提案前後，將局部結構與色差的變化記回畫面對應的三角形。至少兩個複查視角支持且有足夠像素的修改才會留下。最後再檢查兩種裝置的雷射距離和預留照片，通過才輸出新目錄。[主程式](scripts/cleanup_church.py) · [逐面複查](scripts/verify_church_edits.py) · [最終測量](scripts/review_church_cleanup.py)
+
+桌面版提出 5,412 個三角面修改，保留 338 個刪除、204 個補面與 110 個換貼圖；手機版對自己的輕量網格保留 81、16、34 個。以 600 × 400 像素比較 12 個預留視角，桌面網格平均灰階 SSIM 從 0.7549 升至 0.7562。另取未參與逐面複查的 12 個視角，從 0.7629 升至 0.7648，其中 10 個上升。兩組都在既有拍攝路線附近。以移動式雷射核對，桌面大廳內提早超過 30 公分擋住的射線從 18,893 降至 18,629；樓梯區完全沒有交點的射線從 1,676 增至 1,698。大型遮蔽區仍可能缺面。[修改計數](room/site/christ-church/cleanup.json) · [完整驗證資料](room/site/christ-church/cleanup-review.json)
+
+COLMAP 有以可見性移除遮擋已知空處之網格面的做法，CGAL 能沿網格開口的邊界自動三角化；單靠邊界形狀無法區別掃描裂縫和拱門。這裡用已量到的深度決定是否補面。貼圖複查也參考 Waechter 等人對遮擋、曝光差異與貼圖接縫的分析。本流程使用 Open3D、OpenCV 和上述逐面規則。[COLMAP 文件](https://colmap.github.io/faq.html) · [CGAL 補洞文件](https://doc.cgal.org/latest/PMP_Mesh_repair/index.html) · [Let There Be Color!](https://download.mmag.hrz.tu-darmstadt.de/media/FB20/GCC/paper/Waechter-2014-LTB.pdf)
+
+重跑已發布的測試可從修補前的版本取回兩個模型與原始可見性圖。下方重建環境段落列有 Oxford 資料與行人偵測權重的下載方式。可把目前場景或指定的歷史版本當作輸入，每次寫入新的輸出目錄。比較圖預設使用 Noto Sans CJK，可用 `--font` 指定相容的字型集。
+
+```bash
+git worktree add --detach /tmp/church-before-cleanup fe4559b
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=3 python scripts/cleanup_church.py \
+  /tmp/oxford-spires /tmp/church-before-cleanup/room/site/christ-church \
+  /tmp/church-cleaned /tmp/oxford-spires/yolox.onnx
+```
+
 ### 樓梯欄杆局部修補
 
 [從欄杆側視開始](https://clarencechien.github.io/teslarvpoc/christ-church/#rail-repair) · [看雷射剖面、修補前後與橫移對照](https://clarencechien.github.io/teslarvpoc/christ-church/rail-repair.webp)
