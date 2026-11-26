@@ -1,0 +1,180 @@
+{
+  "before": [
+    {
+      "station": "大廳長桌",
+      "frames": [
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 39.53
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 39.52
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 39.66
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 41.1
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 41.22
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 41.52
+        }
+      ]
+    },
+    {
+      "station": "樓梯平台",
+      "frames": [
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 70.96
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 72.85
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 72.86
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 74.92
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 73.67
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 72.85
+        }
+      ]
+    },
+    {
+      "station": "石階實拍路線",
+      "frames": [
+        {
+          "personBoxPixels": 796,
+          "meanLuma": 68.36
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 70.97
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 72.31
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 77.81
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 80.4
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 70.97
+        }
+      ]
+    }
+  ],
+  "after": [
+    {
+      "station": "大廳長桌",
+      "frames": [
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 38.57
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 39.46
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 39.2
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 40.11
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 39.9
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 40.43
+        }
+      ]
+    },
+    {
+      "station": "樓梯平台",
+      "frames": [
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 69.88
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 73.0
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 73.09
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 73.83
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 73.2
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 73.0
+        }
+      ]
+    },
+    {
+      "station": "石階實拍路線",
+      "frames": [
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 82.8
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 82.98
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 83.05
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 84.39
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 88.2
+        },
+        {
+          "personBoxPixels": 0,
+          "meanLuma": 83.15
+        }
+      ]
+    }
+  ]
+}
