@@ -1,0 +1,318 @@
+{
+  "ranges": {
+    "christ-church.glb": {
+      "before": {
+        "hall": {
+          "rays": 355400,
+          "within12": 291337,
+          "early30": 18893,
+          "missing": 2643
+        },
+        "stairs": {
+          "rays": 324505,
+          "within12": 287217,
+          "early30": 4704,
+          "missing": 1676,
+          "through": 71789,
+          "blocked": 667
+        }
+      },
+      "after": {
+        "hall": {
+          "rays": 355400,
+          "within12": 291621,
+          "early30": 18629,
+          "missing": 2622
+        },
+        "stairs": {
+          "rays": 324505,
+          "within12": 287188,
+          "early30": 4684,
+          "missing": 1698,
+          "through": 71789,
+          "blocked": 665
+        }
+      }
+    },
+    "christ-church-mobile.glb": {
+      "before": {
+        "hall": {
+          "rays": 355400,
+          "within12": 289842,
+          "early30": 15705,
+          "missing": 3544
+        },
+        "stairs": {
+          "rays": 324505,
+          "within12": 286733,
+          "early30": 3734,
+          "missing": 2091,
+          "through": 71789,
+          "blocked": 562
+        }
+      },
+      "after": {
+        "hall": {
+          "rays": 355400,
+          "within12": 289907,
+          "early30": 15621,
+          "missing": 3546
+        },
+        "stairs": {
+          "rays": 324505,
+          "within12": 286724,
+          "early30": 3734,
+          "missing": 2090,
+          "through": 71789,
+          "blocked": 562
+        }
+      }
+    }
+  },
+  "photos": [
+    {
+      "camera": 0,
+      "frame": 30,
+      "before": 0.64863,
+      "after": 0.65177,
+      "focus": [
+        0.3658,
+        0.8337
+      ]
+    },
+    {
+      "camera": 0,
+      "frame": 87,
+      "before": 0.76607,
+      "after": 0.76887,
+      "focus": [
+        0.4242,
+        0.4537
+      ]
+    },
+    {
+      "camera": 0,
+      "frame": 177,
+      "before": 0.75525,
+      "after": 0.75591,
+      "focus": [
+        0.1758,
+        0.3812
+      ]
+    },
+    {
+      "camera": 0,
+      "frame": 203,
+      "before": 0.70517,
+      "after": 0.7054,
+      "focus": [
+        0.2592,
+        0.2662
+      ]
+    },
+    {
+      "camera": 1,
+      "frame": 29,
+      "before": 0.75236,
+      "after": 0.75486,
+      "focus": [
+        0.8325,
+        0.2762
+      ]
+    },
+    {
+      "camera": 1,
+      "frame": 87,
+      "before": 0.6597,
+      "after": 0.66264,
+      "focus": [
+        0.2825,
+        0.4763
+      ]
+    },
+    {
+      "camera": 1,
+      "frame": 175,
+      "before": 0.68692,
+      "after": 0.68717,
+      "focus": [
+        0.1675,
+        0.4088
+      ]
+    },
+    {
+      "camera": 1,
+      "frame": 203,
+      "before": 0.79686,
+      "after": 0.79714,
+      "focus": [
+        0.4942,
+        0.5463
+      ]
+    },
+    {
+      "camera": 2,
+      "frame": 29,
+      "before": 0.79299,
+      "after": 0.7964,
+      "focus": [
+        0.1675,
+        0.2387
+      ]
+    },
+    {
+      "camera": 2,
+      "frame": 87,
+      "before": 0.93256,
+      "after": 0.93256,
+      "focus": [
+        0.1675,
+        0.1663
+      ]
+    },
+    {
+      "camera": 2,
+      "frame": 175,
+      "before": 0.80177,
+      "after": 0.80197,
+      "focus": [
+        0.4958,
+        0.6987
+      ]
+    },
+    {
+      "camera": 2,
+      "frame": 203,
+      "before": 0.7601,
+      "after": 0.76,
+      "focus": [
+        0.7275,
+        0.5088
+      ]
+    }
+  ],
+  "meanPhotoChange": 0.0013591666666666613,
+  "additionalPhotos": [
+    {
+      "camera": 0,
+      "frame": 47,
+      "before": 0.70731,
+      "after": 0.70824,
+      "focus": [
+        0.1675,
+        0.1663
+      ]
+    },
+    {
+      "camera": 0,
+      "frame": 66,
+      "before": 0.75339,
+      "after": 0.75582,
+      "focus": [
+        0.1725,
+        0.2712
+      ]
+    },
+    {
+      "camera": 0,
+      "frame": 162,
+      "before": 0.84808,
+      "after": 0.8516,
+      "focus": [
+        0.3558,
+        0.7662
+      ]
+    },
+    {
+      "camera": 0,
+      "frame": 215,
+      "before": 0.81304,
+      "after": 0.81572,
+      "focus": [
+        0.5308,
+        0.2338
+      ]
+    },
+    {
+      "camera": 1,
+      "frame": 46,
+      "before": 0.60435,
+      "after": 0.60663,
+      "focus": [
+        0.1875,
+        0.4688
+      ]
+    },
+    {
+      "camera": 1,
+      "frame": 66,
+      "before": 0.71882,
+      "after": 0.72107,
+      "focus": [
+        0.2792,
+        0.4587
+      ]
+    },
+    {
+      "camera": 1,
+      "frame": 159,
+      "before": 0.67416,
+      "after": 0.67807,
+      "focus": [
+        0.3675,
+        0.3113
+      ]
+    },
+    {
+      "camera": 1,
+      "frame": 214,
+      "before": 0.86745,
+      "after": 0.86745,
+      "focus": [
+        0.1675,
+        0.1663
+      ]
+    },
+    {
+      "camera": 2,
+      "frame": 46,
+      "before": 0.7931,
+      "after": 0.79388,
+      "focus": [
+        0.6642,
+        0.5262
+      ]
+    },
+    {
+      "camera": 2,
+      "frame": 66,
+      "before": 0.83371,
+      "after": 0.83702,
+      "focus": [
+        0.3092,
+        0.4188
+      ]
+    },
+    {
+      "camera": 2,
+      "frame": 159,
+      "before": 0.77675,
+      "after": 0.77712,
+      "focus": [
+        0.3308,
+        0.7612
+      ]
+    },
+    {
+      "camera": 2,
+      "frame": 214,
+      "before": 0.76501,
+      "after": 0.76478,
+      "focus": [
+        0.1675,
+        0.3613
+      ]
+    }
+  ],
+  "failures": []
+}
