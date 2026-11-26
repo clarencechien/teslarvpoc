@@ -10,8 +10,8 @@ function gridRays(view,width,height) {
   const [fx,fy,cx,cy]=view.lens,[k1,k2,k3,k4]=view.distortion;
   const rays=new Float32Array(width*height*3);
   for(let i=0;i<width*height;i++){
-    const x=(((2*(i%width)+.5)*1440/(width*2)-.5)-cx)/fx;
-    const y=(((2*Math.floor(i/width)+.5)*1080/(height*2)-.5)-cy)/fy;
+    const x=((((i%width)+.5)*1440/width-.5)-cx)/fx;
+    const y=(((Math.floor(i/width)+.5)*1080/height-.5)-cy)/fy;
     const radius=Math.hypot(x,y);
     let angle=radius;
     for(let j=0;j<7;j++){
@@ -27,30 +27,68 @@ function gridRays(view,width,height) {
 
 function depthSurface(view,depthImage) {
   const canvas=document.createElement('canvas');
-  canvas.width=depthImage.width;canvas.height=depthImage.height;
+  const w=canvas.width=depthImage.width,h=canvas.height=depthImage.height;
   const ctx=canvas.getContext('2d',{willReadFrequently:true});
   ctx.drawImage(depthImage,0,0);
-  const rgba=ctx.getImageData(0,0,canvas.width,canvas.height).data;
-  const w=canvas.width/2,h=canvas.height/2;
+  const rgba=ctx.getImageData(0,0,w,h).data;
   const rays=gridRays(view,w,h),positions=new Float32Array(rays.length),depth=new Float32Array(w*h);
-  const indices=[];
-  for(let i=0;i<w*h;i++){
-    const p=4*(2*(i%w)+2*Math.floor(i/w)*canvas.width);
-    depth[i]=(256*rgba[p]+rgba[p+1])*.001;
+  for(let i=0;i<depth.length;i++){
+    depth[i]=(256*rgba[4*i]+rgba[4*i+1])*.001;
     for(let j=0;j<3;j++)positions[3*i+j]=rays[3*i+j]*depth[i];
   }
-  function triangle(a,b,c) {
+  const indices=[];
+  function triangle(a,b,c){
     const near=Math.min(depth[a],depth[b],depth[c]),far=Math.max(depth[a],depth[b],depth[c]);
-    if(near>.30 && far-near<.075+.037*near)indices.push(a,b,c);
+    if(near>.30 && far-near<.07+.029*near)indices.push(a,b,c);
   }
-  for(let row=0;row<h-1;row++)for(let col=0;col<w-1;col++){
-    const a=row*w+col;triangle(a,a+w,a+1);triangle(a+1,a+w,a+w+1);
+  // Use two-pixel cells on continuous walls and one-pixel cells on depth edges.
+  // If a neighbour subdivides an edge, both cells must use its midpoint.
+  const cols=Math.floor((w-1)/2),rows=Math.floor((h-1)/2);
+  const fine=new Uint8Array(cols*rows);
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      const corner=2*(y*w+x),center=depth[corner+w+1];
+      for(let dy=0;dy<=2;dy++){
+        for(let dx=0;dx<=2;dx++){
+          if(Math.abs(depth[corner+dy*w+dx]-center)>.045+.018*center)fine[y*cols+x]=1;
+        }
+      }
+    }
   }
-  const g=new THREE.BufferGeometry();
-  g.setAttribute('position',new THREE.BufferAttribute(positions,3));g.setIndex(indices);
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      const i=y*cols+x,tl=2*(y*w+x),tr=tl+2,bl=tl+2*w,br=bl+2,center=tl+w+1;
+      if(fine[i]){
+        for(let dy=0;dy<2;dy++){
+          for(let dx=0;dx<2;dx++){
+            const p=tl+w*dy+dx;
+            triangle(p,p+w,p+1);
+            triangle(p+1,p+w,p+w+1);
+          }
+        }
+        continue;
+      }
+      const top=y>0&&fine[i-cols],left=x>0&&fine[i-1];
+      const bottom=y+1<rows&&fine[i+cols],right=x+1<cols&&fine[i+1];
+      if(!(top||left||bottom||right)){
+        triangle(tl,bl,tr);
+        triangle(tr,bl,br);
+        continue;
+      }
+      const rim=[tl];
+      if(left)rim.push(tl+w);
+      rim.push(bl);
+      if(bottom)rim.push(bl+1);
+      rim.push(br);
+      if(right)rim.push(tr+w);
+      rim.push(tr);
+      if(top)rim.push(tl+1);
+      for(let k=0;k<rim.length;k++)triangle(center,rim[k],rim[(k+1)%rim.length]);
+    }
+  }
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(positions,3));g.setIndex(indices);
   return g;
 }
-
 const slots=[0,1,2,3];
 const vertex=`
   varying vec3 world;
@@ -169,13 +207,16 @@ export class PhotoWalk {
     this.cache=new Map();this.active=[];this.loader=new THREE.TextureLoader();
     this.direction=new THREE.Vector3();this.enabled=false;this.loading=false;this.retryAt=0;
   }
-  static async create(views,invalidate) {
-    async function load(name){
-      const r=await fetch('./photo-walk/'+name+'.json');
-      if(!r.ok)throw Error('實拍索引讀取失敗');return r.json();
+  static async create(invalidate) {
+    const response=await fetch('./walk-light/views.json');
+    if(!response.ok)throw Error('實拍索引讀取失敗');
+    const sources=await response.json();
+    for(const view of sources){
+      view.matrix=new THREE.Matrix4().set(...view.pose.flat());
+      view.position=new THREE.Vector3().setFromMatrixPosition(view.matrix);
+      view.forward=new THREE.Vector3(0,0,-1).transformDirection(view.matrix);
     }
-    const ids=new Set(await load('sources'));
-    return new PhotoWalk(views.filter(v=>ids.has(v.id)),invalidate);
+    return new PhotoWalk(sources,invalidate);
   }
   bundle(view){
     if(this.cache.has(view.id))return Promise.resolve(this.cache.get(view.id));
@@ -183,8 +224,8 @@ export class PhotoWalk {
     return this.inflight.get(view.id);
   }
   async loadBundle(view){
-    const [photo,depth]=await Promise.allSettled([this.loader.loadAsync('./photo-'+view.id+'.webp'),
-      this.loader.loadAsync('./photo-walk/'+view.id+'.png')]);
+    const [photo,depth]=await Promise.allSettled([this.loader.loadAsync('./walk-light/'+view.id+'.webp'),
+      this.loader.loadAsync('./walk-light/'+view.id+'.png')]);
     if(photo.status==='rejected'||depth.status==='rejected'){
       if(photo.status==='fulfilled')photo.value.dispose();
       if(depth.status==='fulfilled')depth.value.dispose();
@@ -202,7 +243,7 @@ export class PhotoWalk {
     if(this.loading||performance.now()<this.retryAt)return;
     const forward=camera.getWorldDirection(this.direction);
     const scored=this.views.map(view=>({view,score:camera.position.distanceToSquared(view.position)+
-      4.2*(1-forward.dot(view.forward))})).sort((a,b)=>a.score-b.score);
+      4.2*(1-forward.dot(view.forward))-(this.active.some(item=>item.view===view)?.08:0)})).sort((a,b)=>a.score-b.score);
     const nearest=scored.slice(0,slots.length).map(entry=>entry.view).sort((a,b)=>a.id-b.id);
     if(!nearest.length||nearest.every((v,i)=>v===this.active[i]?.view))return;
     this.loading=true;

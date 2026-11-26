@@ -15,87 +15,29 @@ const keys = new Set();
 const moveKeys = {ArrowUp:'KeyW', ArrowDown:'KeyS', ArrowLeft:'KeyA', ArrowRight:'KeyD'};
 const tmp = new THREE.Vector3();
 const cut = new THREE.Plane(new THREE.Vector3(0,-1,0), 2.8);
-const uniform = {
-  churchLift:{value:0}, churchPhoto:{value:null}, churchDepth:{value:null}, churchInverse:{value:new THREE.Matrix4()},
-  churchLens:{value:new THREE.Vector4()}, churchDist:{value:new THREE.Vector4()}, churchGain:{value:0}
-};
+const overviewLift={value:0};
 let renderer, controls, views, grid, current, model, mode='walk', dirty=true, ready=false;
-let detailView, pending, generation=0, lastTime=0, lastSelection=0, drag, benchmark;
+let targetEyeHeight=null, lastTime=0, lastSelection=0, drag, benchmark;
 let photoWalk, photoWalkLoad, photoWalkRetry=0;
 let gameScene, scanLoad, gameLoad, action=0, photoReturn;
 const strolling=()=>mode==='walk'||mode==='game';
 const photoStops=[197,199,200,201,202,204,205,206,207,208,209,210];
 let stopIndex=0,routeOpen=false;
-const cache = new Map();
-const textureLoader = new THREE.TextureLoader();
-
-function photoProjection(material) {
-  material.onBeforeCompile = shader => {
-    Object.assign(shader.uniforms, uniform);
-    shader.vertexShader = 'varying vec3 churchPos;\n'+shader.vertexShader.replace('#include <project_vertex>',
-      '#include <project_vertex>\nchurchPos=(modelMatrix*vec4(transformed,1.)).xyz;');
-    shader.fragmentShader = `
-      varying vec3 churchPos;
-      uniform mat4 churchInverse;
-      uniform vec4 churchLens,churchDist;
-      uniform sampler2D churchPhoto,churchDepth;
-      uniform float churchGain,churchLift;
-    `+shader.fragmentShader.replace('#include <color_fragment>', `
-      #include <color_fragment>
-      if(churchGain>0.001){
-        vec3 p=(churchInverse*vec4(churchPos,1.)).xyz;
-        float r=length(p.xy);
-        float theta=atan(r,-p.z);
-        float t=theta*theta;
-        float radial=theta*(1.+t*(churchDist.x+t*(churchDist.y+t*(churchDist.z+t*churchDist.w))));
-        vec2 uv=(vec2(p.x,-p.y)*radial/max(r,.00001)*churchLens.xy+churchLens.zw+0.5)/vec2(1440.,1080.);
-        if(p.z<0. && all(greaterThan(uv,vec2(0.))) && all(lessThan(uv,vec2(1.)))){
-          vec2 bytes=floor(texture2D(churchDepth,uv).rg*255.+.5);
-          float depth=dot(bytes,vec2(256.,1.))*.001;
-          float visible=1.-smoothstep(.13+.012*depth,.3+.023*depth,abs(depth-length(p)));
-          float edge=clamp(35.*min(min(uv.x,1.-uv.x),min(uv.y,1.-uv.y)),0.,1.);
-          diffuseColor.rgb=mix(diffuseColor.rgb,texture2D(churchPhoto,uv).rgb,churchGain*edge*visible);
-        }
-      }
-      if(churchLift>.5) diffuseColor.rgb=pow(max(diffuseColor.rgb,vec3(0.)),vec3(.80));
-    `);
+function addOverviewLight(material){
+  material.onBeforeCompile=shader=>{
+    shader.uniforms.churchLift=overviewLift;
+    shader.fragmentShader='uniform float churchLift;\n'+shader.fragmentShader.replace('#include <color_fragment>',
+      '#include <color_fragment>\nif(churchLift>.5)diffuseColor.rgb=pow(max(diffuseColor.rgb,vec3(0.)),vec3(.80));');
   };
 }
 
-async function fetchDetail(view) {
-  if(cache.has(view.id)) return cache.get(view.id);
-  const pair=await Promise.allSettled([textureLoader.loadAsync('photo-'+view.id+'.webp'),textureLoader.loadAsync('depth-'+view.id+'.png?v=cleanup1')]);
-  if(pair.some(result=>result.status==='rejected')){
-    for(const result of pair) if(result.status==='fulfilled') result.value.dispose();
-    throw new Error('照片讀取失敗');
-  }
-  const [photo,depth]=pair.map(result=>result.value);
-  photo.flipY=false;
-  photo.colorSpace=THREE.SRGBColorSpace;
-  depth.flipY=false;
-  depth.generateMipmaps=false;
-  depth.minFilter=depth.magFilter=THREE.NearestFilter;
-  const result={photo,depth};
-  cache.set(view.id,result);
-  return result;
-}
-
-function releaseCache(keep) {
-  for(const [id,pair] of cache){
-    if(cache.size<=5) break;
-    if(id===keep || id===detailView?.id) continue;
-    pair.photo.dispose(); pair.depth.dispose(); cache.delete(id);
-  }
-}
-
 function selectPhotoWalk(){
-  const {x,z}=camera.position;
-  const requested=mode==='walk' && $('detail').checked && z < -8 && z > -22 && x > -5 && x < 9;
+  const requested=mode==='walk' && $('detail').checked;
   if(photoWalk)photoWalk.enabled=requested;
   if(!requested){canvas.dataset.photowalk='off';return;}
   if(!photoWalk){
     if(!photoWalkLoad && performance.now()>=photoWalkRetry){
-      photoWalkLoad=PhotoWalk.create(views,()=>{dirty=true;}).then(walk=>{
+      photoWalkLoad=PhotoWalk.create(()=>{dirty=true;}).then(walk=>{
         photoWalk=walk;selectPhotoWalk();dirty=true;
       }).catch(()=>{photoWalkRetry=performance.now()+3000;}).finally(()=>{photoWalkLoad=null;});
     }
@@ -105,37 +47,12 @@ function selectPhotoWalk(){
   canvas.dataset.photowalk=photoWalk.active.length?'ready':'loading';
 }
 
-function selectDetail(){
-  selectPhotoWalk();
-  if(mode!=='walk'||!$('detail').checked||(photoWalk?.enabled&&photoWalk.active.length)){uniform.churchGain.value=0;return;}
-  const direction=camera.getWorldDirection(tmp);
-  let best,lowest=Infinity;
-  for(const view of views){
-    if(view.detail===false) continue;
-    const score=camera.position.distanceToSquared(view.position)+4.2*(1-direction.dot(view.forward));
-    if(score<lowest){lowest=score;best=view;}
-  }
-  const gain=detailView ? 1-THREE.MathUtils.smoothstep(camera.position.distanceTo(detailView.position),.20,2.8) : 0;
-  if(Math.abs(uniform.churchGain.value-gain)>.001){uniform.churchGain.value=gain;dirty=true;}
-  if(lowest>9 || best===detailView || best===pending) return;
-  const token=++generation;
-  pending=best;
-  fetchDetail(best).then(({photo,depth})=>{
-    if(token!==generation){releaseCache(detailView?.id);return;}
-    pending=null; detailView=best;
-    uniform.churchPhoto.value=photo; uniform.churchDepth.value=depth;
-    uniform.churchInverse.value.copy(best.matrix).invert();
-    uniform.churchLens.value.fromArray(best.lens);uniform.churchDist.value.fromArray(best.distortion);
-    releaseCache(best.id);selectDetail();dirty=true;
-  }).catch(()=>{if(token===generation) pending=null;});
-}
-
 function setMode(next) {
-  mode=next;
+  mode=next;targetEyeHeight=null;
   if(photoWalk)photoWalk.enabled=false;
   canvas.dataset.photowalk='off';
   benchmark=null;
-  uniform.churchLift.value=next==='overview'?1:0;
+  overviewLift.value=next==='overview'?1:0;
   camera.fov=next==='overview'?38:70;
   camera.updateProjectionMatrix();
   scene.background.setHex(next==='overview'?0xe2ddd1:0x302e28);
@@ -146,15 +63,15 @@ function setMode(next) {
   $('reference').hidden=next!=='compare';
   $('detail').disabled=next!=='walk';
   $('bench').disabled=next==='compare';
+  $('mouse-look').disabled=!strolling();
   for(const id of ['walk','game','overview','compare']) $(id).setAttribute('aria-pressed',String(id===next));
   for(const material of model.materials) material.clippingPlanes=next==='overview'?[cut]:[];
-  uniform.churchGain.value=0;
   $('help').textContent=next==='game'?'沿石階走到平台，可轉身走上另一段樓梯。石材、欄杆與燈具為遊戲美術重繪。':next==='overview'?'拖曳旋轉、滾輪或雙指縮放。為看清配置，這個視圖切開屋頂。':next==='compare'?'原始魚眼相機照片，可檢查窗框、桌沿和石階的細節。':'拖曳環顧，用方向鍵或 WASD 沿拍攝區域移動。';
   dirty=true;
 }
 
 function positionAt(view,lookUp=false) {
-  current=view;
+  current=view;targetEyeHeight=null;
   camera.position.copy(view.position);
   turn.setFromRotationMatrix(view.matrix,'YXZ');turn.z=0;
   if(view.id===198||lookUp) turn.x+=.24;
@@ -165,7 +82,7 @@ function positionAt(view,lookUp=false) {
 
 function station(view) {
   routeOpen=false;setMode('walk');positionAt(view);
-  selectDetail();
+  selectPhotoWalk();
   canvas.focus({preventScroll:true});
 }
 
@@ -194,7 +111,7 @@ function constrain(x,z){
   // Test intermediate cells too, so a slow frame cannot jump across a wall.
   const dx=x-camera.position.x, dz=z-camera.position.z;
   const steps=Math.max(1,Math.ceil(Math.hypot(dx,dz)/(grid.cell*.5)));
-  let height=camera.position.y;
+  let height=targetEyeHeight??camera.position.y;
   for(let i=1;i<=steps;i++){
     if(mode==='game'&&!inChurchGame(camera.position.x+dx*i/steps,camera.position.z+dz*i/steps)) return;
     const col=Math.round((camera.position.x+dx*i/steps-grid.origin[0])/grid.cell);
@@ -204,8 +121,8 @@ function constrain(x,z){
     if(cm===-32768 || Math.abs(cm*.01-height)>.4) return;
     height=cm*.01;
   }
-  camera.position.set(x,height,z);
-  $('caption').textContent=mode==='game'?'遊戲重繪 · 石階':routeOpen?'自由移動 · 合成視角':'室內漫遊';highlight(null);
+  targetEyeHeight=height;camera.position.x=x;camera.position.z=z;
+  $('caption').textContent=mode==='game'?'遊戲重繪 · 石階':routeOpen?'自由移動 · 實拍合成':'室內漫遊';highlight(null);
 }
 
 function step(time){
@@ -235,10 +152,15 @@ function step(time){
       benchmark=null;$('bench').disabled=false;
     }
   }
-  if(time-lastSelection>140){selectDetail();lastSelection=time;}
+  if(targetEyeHeight!==null && strolling()){
+    camera.position.y=THREE.MathUtils.damp(camera.position.y,targetEyeHeight,15,dt);
+    if(Math.abs(camera.position.y-targetEyeHeight)<.001){camera.position.y=targetEyeHeight;targetEyeHeight=null;}
+    dirty=true;
+  }
+  if(time-lastSelection>140){selectPhotoWalk();lastSelection=time;}
   if(dirty&&mode!=='compare'){
     if(mode==='walk'&&photoWalk?.enabled&&photoWalk.active.length){
-      uniform.churchGain.value=0;photoWalk.render(renderer,camera,scene);
+      photoWalk.render(renderer,camera,scene);
     }else renderer.render(mode==='game'?gameScene:scene,camera);
     dirty=false;
   }
@@ -262,7 +184,7 @@ async function start(){
   new ResizeObserver(resize).observe(canvas);resize();
   const compact=window.matchMedia('(max-width: 680px)').matches;
   const modelFile=compact?'christ-church-mobile.glb':'christ-church.glb';
-  const data=await fetch('./scene.json?v=cleanup1').then(r=>{if(!r.ok)throw Error();return r.json();});
+  const data=await fetch('./scene.json?v=walklight1').then(r=>{if(!r.ok)throw Error();return r.json();});
   views=data.views;
   grid=data.walkGrid;
   const bytes=Uint8Array.from(atob(grid.heights),c=>c.charCodeAt(0));
@@ -275,11 +197,11 @@ async function start(){
   }
   model={materials:[]};
   async function loadScan() {
-    const gltf=await new GLTFLoader().loadAsync('./'+modelFile+'?v=cleanup1');
+    const gltf=await new GLTFLoader().loadAsync('./'+modelFile+'?v=walklight1');
     gltf.scene.traverse(obj=>{
       if(!obj.isMesh)return;
       const mat=obj.material;
-      model.materials.push(mat);photoProjection(mat);
+      model.materials.push(mat);addOverviewLight(mat);
       if(mat.map)mat.map.anisotropy=Math.min(4,renderer.capabilities.getMaxAnisotropy());
     });
     scene.add(gltf.scene);
@@ -320,11 +242,11 @@ async function start(){
       routeOpen=true;stopIndex=THREE.MathUtils.clamp(index,0,photoStops.length-1);
       const view=views.find(v=>v.id===photoStops[stopIndex]);
       $('detail').checked=true;setMode('walk');positionAt(view,true);
-      $('caption').textContent='實拍位置 '+(stopIndex+1)+' / '+photoStops.length;
+      $('caption').textContent='修補後實拍位置 '+(stopIndex+1)+' / '+photoStops.length;
       $('prev-photo').disabled=stopIndex===0;$('next-photo').disabled=stopIndex===photoStops.length-1;
       $('photo-progress').textContent=(stopIndex+1)+' / '+photoStops.length;
       $('help').textContent='前後拍攝點可看實拍細節。用方向鍵離開拍攝點，可看合成視角。';
-      selectDetail();canvas.focus({preventScroll:true});
+      selectPhotoWalk();canvas.focus({preventScroll:true});
     });
   }
   function railSideView(){
@@ -335,7 +257,7 @@ async function start(){
       turn.setFromQuaternion(camera.quaternion,'YXZ');highlight(null);railButton.setAttribute('aria-pressed','true');
       $('caption').textContent='欄杆側視';
       $('help').textContent='目前顯示模型內建貼圖，可左右移動檢查欄孔，也可勾選近景實拍。';
-      selectDetail();canvas.focus({preventScroll:true});
+      selectPhotoWalk();canvas.focus({preventScroll:true});
     });
   }
   const railButton=document.createElement('button');
@@ -346,7 +268,7 @@ async function start(){
   $('game').onclick=enterGame;
   $('walk').onclick=()=>activate('scan',()=>{
     if(mode==='game'){
-      setMode('walk');$('caption').textContent='室內漫遊';selectDetail();canvas.focus({preventScroll:true});
+      setMode('walk');$('caption').textContent='室內漫遊';selectPhotoWalk();canvas.focus({preventScroll:true});
     }else station(current);
   });
   $('overview').onclick=()=>activate('scan',overview);
@@ -357,7 +279,7 @@ async function start(){
       if(photoReturn==='game'){
         setMode('game');$('caption').textContent='遊戲重繪 · 石階';
       }else if(photoReturn==='walk'&&routeOpen){
-        setMode('walk');$('caption').textContent='實拍路線';selectDetail();
+        setMode('walk');$('caption').textContent='實拍路線';selectPhotoWalk();
       }else station(current);
       return;
     }
@@ -371,16 +293,32 @@ async function start(){
     $('reference').src='photo-'+current.id+'.webp';
     $('caption').textContent=(current.name||'鄰近拍攝點')+' · 原照';
   };
-  $('detail').onchange=()=>{selectDetail();dirty=true;};
+  $('detail').onchange=()=>{selectPhotoWalk();dirty=true;};
   $('bench').onclick=()=>{benchmark={start:performance.now(),last:0,frames:[]};$('bench').disabled=true;$('help').textContent='正在轉動視角量測幀率…';};
+  const mouseLook=$('mouse-look');
+  mouseLook.hidden=!canvas.requestPointerLock||!matchMedia('(pointer:fine)').matches;
+  mouseLook.onclick=async()=>{
+    try{canvas.focus({preventScroll:true});await canvas.requestPointerLock();}
+    catch{$('help').textContent='此瀏覽器無法鎖定滑鼠，拖曳畫面仍可環顧。';}
+  };
+  document.addEventListener('pointerlockchange',()=>{
+    drag=null;keys.clear();
+    $('help').textContent=document.pointerLockElement===canvas?'移動滑鼠環顧，用 WASD 行走，按 Esc 放開滑鼠。':'拖曳環顧，用方向鍵或 WASD 移動。';
+  });
+  function look(dx,dy){
+    turn.y-=dx;turn.x=THREE.MathUtils.clamp(turn.x-dy,-1.42,1.42);
+    camera.quaternion.setFromEuler(turn);dirty=true;
+  }
+  document.addEventListener('mousemove',e=>{
+    if(document.pointerLockElement===canvas&&strolling())look(e.movementX*.0022,e.movementY*.0022);
+  });
   canvas.addEventListener('pointerdown',e=>{
-    if(!strolling())return;
+    if(!strolling()||document.pointerLockElement===canvas)return;
     drag={id:e.pointerId,x:e.clientX,y:e.clientY};canvas.setPointerCapture(e.pointerId);
   });
   canvas.addEventListener('pointermove',e=>{
     if(!drag||drag.id!==e.pointerId||!strolling())return;
-    turn.y-=(e.clientX-drag.x)*.004;turn.x=THREE.MathUtils.clamp(turn.x-(e.clientY-drag.y)*.004,-1.42,1.42);
-    camera.quaternion.setFromEuler(turn);drag.x=e.clientX;drag.y=e.clientY;dirty=true;
+    look((e.clientX-drag.x)*.004,(e.clientY-drag.y)*.004);drag.x=e.clientX;drag.y=e.clientY;
   });
   canvas.addEventListener('lostpointercapture',()=>{drag=null;});
   window.addEventListener('keydown',e=>{

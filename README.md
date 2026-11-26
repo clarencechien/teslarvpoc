@@ -4,7 +4,33 @@
 
 **[進入 Christ Church 03](https://clarencechien.github.io/teslarvpoc/christ-church/) · [下載照片貼圖 GLB](https://clarencechien.github.io/teslarvpoc/christ-church/christ-church.glb)**
 
-進入後拖曳環顧，用方向鍵、WASD 或觸控方向鈕在拍攝走道附近移動。五個拍攝點可直接跳到大廳或樓梯。[石階仰視](https://clarencechien.github.io/teslarvpoc/christ-church/#stairs-up) 可從下方看窗邊平台。「全區剖視」可看兩個空間如何連通。「疊加近處實拍細節」可切換同一位置的渲染方式。「對照原照」會打開鄰近拍攝點的原始魚眼視圖。
+進入後拖曳環顧，用方向鍵、WASD 或觸控方向鈕在拍攝走道附近移動。五個拍攝點可直接跳到大廳或樓梯。[石階仰視](https://clarencechien.github.io/teslarvpoc/christ-church/#stairs-up) 可從下方看窗邊平台。「全區剖視」可看兩個空間如何連通。桌機可用「滑鼠自由視角」轉頭，按 Esc 結束。勾選「疊加去人影、校色後的多視角實拍」可查看實拍細節。「對照原照」會打開鄰近拍攝點的原始魚眼視圖。
+
+### 統一窗光、移除行人與實際漫遊複查
+
+[從窗前石階進入](https://clarencechien.github.io/teslarvpoc/christ-church/#photo-stairs) · [同一表面的光影對照圖](https://clarencechien.github.io/teslarvpoc/christ-church/walk-light/lighting-comparison.webp) · [三段實際行走的前後對照動畫](https://clarencechien.github.io/teslarvpoc/christ-church/walk-light/walk-comparison.webp)
+
+取 257 張已標定照片，沿雷射量到的表面，找出不同時間仍看得到的同一塊石材或桌面。流程避開人像、過曝窗格與被前景擋住的像素，用 1,285 組相機配對估計每張照片的曝光與色偏。另用 257 組未參與校色的配對檢查，同一表面在兩張照片間的曝光差中位數由 0.094 降到 0.073 級，降低約 22%。若把紋理邊緣與局部暗影的差異也逐點計入，逐對取中位數後為 0.312 與 0.301 級。窗光的方向、日照亮斑與大廳的暗部取自拍攝現場。[校色與逐張去人紀錄](room/site/christ-church/walk-light/audit.json)
+
+遇到行人時，先找其他時刻能看到背景的原照，再用雷射距離核對遮擋。人物周圍的暗影得有其他視角看到較亮的同一表面，才一併修補。整張照片修一次，再放大分區找小人影。相同的全圖與放大偵測從 81 張有反應降至 14 張；第二輪在 25 張照片接受了額外修補。另有 7 張照片修到與人物相連、且有跨視角證據的暗影。偵測數包含可能被辨識成人的壁畫或固定裝飾。桌面與手機模型各更新了 177 塊照片貼圖。漫遊依位置與方向從 202 張清理後的照片中選圖，同時最多疊四張。缺少佐證的背景會降低投影權重。大幅偏離採集路線時，仍能看到階緣破損與貼圖拉伸。原始魚眼照片可用「對照原照」查看。
+
+第三次檢查在石階第二站找到一個人像偵測器量不到的問題。第一輪去人後，鞋子旁的地板留下了矩形補丁。程式沿原人物框檢查亮度接縫，從最多 65 個鄰近視角選取能看見背景的照片，按表面距離重新投影，再以 GrabCut 縮小到人物輪廓，用 Poisson 融合接回原地板。發布資料共有 10 張照片接受這道修補。放大仍能看出鞋子原先遮住處的石紋較軟。[第二站實際畫面](https://clarencechien.github.io/teslarvpoc/christ-church/walk-light/landing-comparison.webp) · [OpenCV GrabCut](https://docs.opencv.org/4.x/d8/d83/tutorial_py_grabcut.html) · [OpenCV 無縫融合](https://docs.opencv.org/4.x/df/da0/group__photo__clone.html)
+
+驗證程式在 Chromium 實際操作大廳長桌、樓梯平台、石階實拍三段路線，各走相同的按鍵序列，逐步截取六張畫面，並檢查原照與剖視切換。動畫並排顯示相同步伐的舊版與新版。另依序停在 12 個石階拍攝點，同一人物偵測器有反應的站點從 10 處降為 0 處。這只涵蓋當下相機朝向。第二站腳邊仍有局部暗痕。[12 站檢查](room/site/christ-church/walk-light/stairs-check.json)[逐步畫面檢查](room/site/christ-church/walk-light/route-check.json) · [行走驗證程式](scripts/review_church_walk.py)
+
+另用 10 張未參與貼圖、校色或漫遊投影的原照檢查相同視角，以 704 × 411 畫面扣除四周 5 像素計算灰階 SSIM。平均從 0.835 到 0.856，其中 6 個視角上升，4 個下降。含人的原照會把移除人物也計為差異。[逐張分數](room/christ-church-walk-views.csv)
+
+校色借鑑 Brown 與 Lowe 在重疊區估計曝光增益的方法。RobustNeRF 和 NeRF On-the-go 則示範如何在遊客往來的場景辨認跨視角不一致的觀測。這個靜態網頁版採用量測深度、照片重投影與背景替換，建置時可使用 CPU。[Brown 與 Lowe](https://www.cs.ubc.ca/~lowe/papers/07brown.pdf) · [RobustNeRF](https://openaccess.thecvf.com/content/CVPR2023/html/Sabour_RobustNeRF_Ignoring_Distractors_With_Robust_Losses_CVPR_2023_paper.html) · [NeRF On-the-go](https://openaccess.thecvf.com/content/CVPR2024/html/Ren_NeRF_On-the-go_Exploiting_Uncertainty_for_Distractor-free_NeRFs_in_the_Wild_CVPR_2024_paper.html)
+
+重跑這一版時，先依下方重建環境段落準備 Oxford 資料與 YOLOX 權重，安裝 Chromium 及 Noto Sans CJK 字型。指令會完成校色、背景修補、模型貼圖更新與瀏覽器行走檢查，最後寫入新的靜態網站目錄。現有的輸出目錄會受到保護。可用 `--chromium` 與 `--font` 指定本機路徑。
+
+```bash
+git worktree add --detach /tmp/church-before-light 2fed0e8
+python -m pip install playwright==1.62.0
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=2 python scripts/refine_church_walk.py \
+  /tmp/oxford-spires /tmp/church-before-light/room/site/christ-church \
+  /tmp/oxford-spires/yolox.onnx /tmp/church-walk-cache /tmp/church-walk
+```
 
 ### 全室自動清理與逐面複查
 
@@ -44,9 +70,9 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=3 python scripts/cleanup_church.py \
 
 [從第一個實拍位置開始](https://clarencechien.github.io/teslarvpoc/christ-church/#photo-stairs) · [直接看留出照片位置的合成視角](https://clarencechien.github.io/teslarvpoc/christ-church/#stairs-up) · [看同角度與橫移對照](https://clarencechien.github.io/teslarvpoc/christ-church/photo-walk-comparison.webp)
 
-用拍攝點旁的左右箭頭走過 12 個真實相機位置。第一站可以看到前方平台和石階上的窗光。到站後在原相機的視野內依鏡頭標定顯示該張實拍；拖曳可環顧，用 WASD、方向鍵或右下角按鈕可自由離開路線。相機中心以外，近景照片依雷射距離補償視差，隨距離逐步切換為多視角合成。關閉「疊加近景實拍」可檢查底層網格。
+用拍攝點旁的左右箭頭走過 12 個真實相機位置。第一站可以看到前方平台和石階上的窗光。到站後在原相機的視野內依鏡頭標定顯示去人影、校色後的照片；拖曳可環顧，用 WASD、方向鍵或右下角按鈕可自由離開路線。相機中心以外，近景照片依雷射距離補償視差，隨距離逐步切換為多視角合成。關閉「疊加近景實拍」可檢查底層網格。
 
-樓梯有 67 組已標定的位置與方向。瀏覽器依觀看位置和朝向選取最多四張照片，從固定雷射點生成的深度格網補充原網格缺少的表面，在深度斷層處斷開三角形。以量測距離、照片邊緣、視差及多張照片的色彩一致性加權。離線使用 YOLOX 將偵測到的行人區域從跨視角投影中排除，停在實拍點仍可看到當時拍到的人。人物邊緣、細欄杆和被遮住的背景仍可能留有淡影或缺口。[重建程式](scripts/build_church_photowalk.py) · [OpenCV Zoo 人物偵測模型](https://huggingface.co/opencv/object_detection_yolox)
+初版樓梯有 67 組已標定的位置與方向。當時的瀏覽器依觀看位置和朝向選取最多四張照片，從固定雷射點生成的深度格網補充原網格缺少的表面，在深度斷層處斷開三角形。以量測距離、照片邊緣、視差及多張照片的色彩一致性加權。離線使用 YOLOX 將偵測到的行人區域從跨視角投影中排除，當時停在實拍點仍會看到入鏡的人。人物邊緣、細欄杆和被遮住的背景仍可能留有淡影或缺口。[重建程式](scripts/build_church_photowalk.py) · [OpenCV Zoo 人物偵測模型](https://huggingface.co/opencv/object_detection_yolox)
 
 在欄杆修補前，以相同瀏覽器視角比對 5 張未用於投影的照片（含另外兩台相機）。灰階 SSIM 平均從單張近照投影的 0.797 提高到 0.832。以石階仰視第 198 幀為例，遊戲重繪為 0.514、單張投影為 0.707、多視角合成為 0.755。畫面為 758 × 456，計分時去除外圈 5 像素。這組結果衡量照片外觀，涵蓋同一採集路線附近的視角。[逐張數據](room/christ-church-photowalk.csv)
 

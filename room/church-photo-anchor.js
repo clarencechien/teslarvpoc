@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 
 // At a registered camera center a ray has a known photographic colour even over
-// glass, a moving person or a hole in the survey. Nearby, compensate for parallax
+// glass or a hole in the survey. Repaired regions use the cleanup confidence.
+// Nearby, compensate for parallax
 // using range, then fade to the multi-view 3D solution as the baseline increases.
 export function makePhotoAnchor(){
   const uniforms={invProjection:{value:new THREE.Matrix4()},worldFromEye:{value:new THREE.Matrix4()},
@@ -37,7 +38,12 @@ export function makePhotoAnchor(){
         }
         float edge=min(min(uvz.x,1.-uvz.x),min(uvz.y,1.-uvz.y));
         float unstable=max(float(d<.25),smoothstep(.16,.48,error))*smoothstep(.01,.16,length(offset));
-        float alpha=strength*(1.-unstable)*smoothstep(0.,.025,edge);
+        float clean=texture2D(ranges,uvz.xy).b;
+        // Distant masonry stays stable farther from the source than a nearby
+        // post. Fade by angular parallax as well as camera displacement.
+        float parallax=length(cross(ray,normalize(ray*max(.25,d)+offset)));
+        float stableRay=1.-smoothstep(.075,.26,parallax);
+        float alpha=strength*stableRay*(1.-unstable)*smoothstep(.08,.75,clean)*smoothstep(0.,.025,edge);
         if(uvz.z<=0.||alpha<.001)discard;
         gl_FragColor=vec4(texture2D(photo,uvz.xy).rgb,alpha);
         #include <colorspace_fragment>
@@ -47,19 +53,23 @@ export function makePhotoAnchor(){
   const direction=new THREE.Vector3();
   return (renderer,camera,candidates)=>{
     camera.getWorldDirection(direction);
-    let best=null,bestScore=Infinity;
+    let best=null,bestScore=Infinity,runnerUp=Infinity;
     for(const item of candidates){
       const distance=camera.position.distanceTo(item.view.position),facing=direction.dot(item.view.forward);
-      if(distance>=.52||facing<.35)continue;
+      if(distance>=1.05||facing<.35)continue;
       const score=distance*distance+.19*(1-facing);
-      if(score<bestScore){best=item;bestScore=score;}
+      if(score<bestScore){runnerUp=bestScore;best=item;bestScore=score;}
+      else runnerUp=Math.min(runnerUp,score);
     }
     if(!best)return;
     const v=best.view;
     uniforms.invProjection.value.copy(camera.projectionMatrixInverse);uniforms.worldFromEye.value.copy(camera.matrixWorld);
     uniforms.source.value.copy(v.matrix).invert();uniforms.lens.value.fromArray(v.lens);uniforms.k.value.fromArray(v.distortion);
     uniforms.offset.value.subVectors(camera.position,v.position);
-    uniforms.strength.value=1.-THREE.MathUtils.smoothstep(uniforms.offset.value.length(),.025,.52);
+    const baseline=uniforms.offset.value.length();
+    const tie=THREE.MathUtils.smoothstep(runnerUp-bestScore,.004,.11);
+    uniforms.strength.value=(1.-THREE.MathUtils.smoothstep(baseline,.03,1.05))*
+      (1.-.48*(1.-tie)*THREE.MathUtils.smoothstep(baseline,.06,.38));
     uniforms.photo.value=best.photo;uniforms.ranges.value=best.depth;renderer.render(scene,camera);
   };
 }
