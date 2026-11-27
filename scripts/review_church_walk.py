@@ -15,6 +15,7 @@ from playwright.sync_api import sync_playwright
 from build_church_photowalk import people_visibility
 
 ROUTES = [("大廳長桌", "wawdd"), ("樓梯平台", "wawds"), ("石階實拍路線", "wawds")]
+DETAIL_ROUTES = [ROUTES[0], ("石階第二站", "awdda")]
 CLOCK = """{const raf=window.requestAnimationFrame.bind(window);let count=0,last=-1;
 window.requestAnimationFrame=cb=>raf(t=>{if(t!==last){count++;last=t}cb(count*1000/30)});}"""
 WALK = """key=>new Promise(resolve=>{
@@ -24,7 +25,7 @@ WALK = """key=>new Promise(resolve=>{
   n++;requestAnimationFrame(step);}requestAnimationFrame(step);})"""
 
 
-def record(browser, url, phone=False):
+def record(browser, url, phone=False, stations=ROUTES):
     page = browser.new_page(
         viewport=dict(width=390 if phone else 840, height=740),
         device_scale_factor=1,
@@ -38,8 +39,12 @@ def record(browser, url, phone=False):
     page.goto(url.rstrip("/") + "/#stairs-up")
     page.wait_for_selector("#loading[hidden]", state="attached", timeout=120000)
     routes = []
-    for name, keys in ROUTES:
-        page.get_by_role("button", name=name, exact=True).click()
+    for name, keys in stations:
+        button = "石階實拍路線" if name == "石階第二站" else name
+        page.get_by_role("button", name=button, exact=True).click()
+        if name == "石階第二站":
+            page.locator("#next-photo").click()
+            assert page.locator("#photo-progress").inner_text() == "2 / 12"
         frames = []
         for key in " " + keys:
             if key != " ":
@@ -136,17 +141,17 @@ def landing_comparison(before, after, path, font):
     sheet.save(path, quality=94)
 
 
-def movie(before, after, path, font):
+def movie(before, after, path, font, stations=ROUTES, revised="去人影與曝光校正後"):
     f = ImageFont.truetype(str(font), 22, index=3)
     small = ImageFont.truetype(str(font), 15, index=3)
     frames = []
-    for i, (name, _) in enumerate(ROUTES):
+    for i, (name, _) in enumerate(stations):
         for j, (old, new) in enumerate(zip(before[i], after[i])):
             w = 540
             h = round(w * old.height / old.width)
             im = Image.new("RGB", (2 * w + 18, h + 82), "#f3f0e8")
             d = ImageDraw.Draw(im)
-            for col, (view, tag) in enumerate([(old, "前一版"), (new, "去人影與曝光校正後")]):
+            for col, (view, tag) in enumerate([(old, "前一版"), (new, revised)]):
                 left = 6 + col * (w + 6)
                 im.paste(view.resize((w, h), Image.Resampling.LANCZOS), (left, 43))
                 d.text((left + 3, 5), name + "　·　" + tag, font=f, fill="#293b2f")
@@ -161,11 +166,55 @@ def movie(before, after, path, font):
         path,
         save_all=True,
         append_images=frames[1:],
-        duration=[950, 470, 470, 470, 470, 800] * 3,
+        duration=[950, 470, 470, 470, 470, 800] * len(stations),
         loop=0,
         quality=86,
         method=5,
     )
+
+
+def detail_card(animation, path, font):
+    """Show the inspected chair edge and the landing at the same walk steps."""
+    title = ImageFont.truetype(str(font), 21, index=3)
+    small = ImageFont.truetype(str(font), 14, index=3)
+    sheet = Image.new("RGB", (1018, 636), "#f3f0e8")
+    draw = ImageDraw.Draw(sheet)
+    draw.text((7, 5), "前一版", font=title, fill="#293b2f")
+    draw.text((511, 5), "這次修補後", font=title, fill="#293b2f")
+    with Image.open(animation) as movie:
+        for row, (frame, label, bounds) in enumerate(
+            [
+                (2, "大廳長桌，前進後向左橫移", (0.07, 0.40, 0.94, 0.96)),
+                (6, "石階第二站，原本鞋子遮住的地磚", (0.28, 0.39, 0.80, 0.88)),
+            ]
+        ):
+            movie.seek(frame)
+            height = movie.height - 82
+            for col in range(2):
+                left = 6 + 546 * col
+                x0, y0, x1, y1 = bounds
+                view = movie.crop(
+                    (
+                        left + round(540 * x0),
+                        43 + round(height * y0),
+                        left + round(540 * x1),
+                        43 + round(height * y1),
+                    )
+                )
+                # Preserve aspect ratio while enlarging both crops by the same factor.
+                scale = min(498 / view.width, 246 / view.height)
+                view = view.resize(
+                    (round(view.width * scale), round(view.height * scale)), Image.Resampling.LANCZOS
+                )
+                sheet.paste(view, (6 + 504 * col + (498 - view.width) // 2, 70 + row * 277))
+            draw.text((8, 41 + row * 277), label, font=title, fill="#293b2f")
+    draw.text(
+        (8, 608),
+        "相同相機與步伐　·　Oxford Spires Dataset · Yifu Tao 等人 · CC BY-NC-SA 4.0",
+        font=small,
+        fill="#36483c",
+    )
+    sheet.save(path, quality=94)
 
 
 def exposure_example(a, b, gains, path, font):
@@ -266,7 +315,23 @@ def main(args):
             headless=True,
             args=["--enable-unsafe-swiftshader", "--use-angle=swiftshader", "--disable-dev-shm-usage"],
         )
-        before, after = [record(browser, url, args.phone) for url in (args.before, args.after)]
+        urls = (args.before, args.after)
+        only_details = getattr(args, "details_only", False)
+        stations = DETAIL_ROUTES if only_details else [*ROUTES, DETAIL_ROUTES[1]]
+        before, after = [record(browser, url, args.phone, stations) for url in urls]
+        args.output.mkdir(parents=True, exist_ok=True)
+        movie(
+            [before[0], before[-1]],
+            [after[0], after[-1]],
+            args.output / "detail-pass.webp",
+            args.font,
+            DETAIL_ROUTES,
+            "地磚與桌沿修補後",
+        )
+        detail_card(args.output / "detail-pass.webp", args.output / "detail-crops.webp", args.font)
+        if only_details:
+            browser.close()
+            return
         stops = {
             k: inspect_stairs(browser, url, net)
             for k, url in (("before", args.before), ("after", args.after))
@@ -292,6 +357,7 @@ if __name__ == "__main__":
     parser.add_argument("after")
     parser.add_argument("detector", type=Path)
     parser.add_argument("output", type=Path)
+    parser.add_argument("--details-only", action="store_true")
     parser.add_argument("--phone", action="store_true")
     parser.add_argument("--chromium", type=Path, default=Path("/usr/bin/chromium"))
     parser.add_argument(

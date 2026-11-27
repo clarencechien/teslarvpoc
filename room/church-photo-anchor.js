@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {makeHallProjection} from './church-hall-proxy.js';
 
 // At a registered camera center a ray has a known photographic colour even over
 // glass or a hole in the survey. Repaired regions use the cleanup confidence.
@@ -51,12 +52,13 @@ export function makePhotoAnchor(){
   const quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),mat);quad.frustumCulled=false;
   const scene=new THREE.Scene();scene.add(quad);
   const direction=new THREE.Vector3();
+  const drawHall=makeHallProjection();
   return (renderer,camera,candidates)=>{
     camera.getWorldDirection(direction);
     let best=null,bestScore=Infinity,runnerUp=Infinity;
     for(const item of candidates){
       const distance=camera.position.distanceTo(item.view.position),facing=direction.dot(item.view.forward);
-      if(distance>=1.05||facing<.35)continue;
+      if(distance>=(item.hall?1.7:1.05)||facing<.35)continue;
       const score=distance*distance+.19*(1-facing);
       if(score<bestScore){runnerUp=bestScore;best=item;bestScore=score;}
       else runnerUp=Math.min(runnerUp,score);
@@ -71,5 +73,17 @@ export function makePhotoAnchor(){
     uniforms.strength.value=(1.-THREE.MathUtils.smoothstep(baseline,.03,1.05))*
       (1.-.48*(1.-tie)*THREE.MathUtils.smoothstep(baseline,.06,.38));
     uniforms.photo.value=best.photo;uniforms.ranges.value=best.depth;renderer.render(scene,camera);
+    if(best.hall && camera.position.z>4){
+      const along=THREE.MathUtils.smoothstep(Math.abs(direction.z),.65,.93);
+      const onset=THREE.MathUtils.smoothstep(baseline,.015,.15);
+      const near=1.-THREE.MathUtils.smoothstep(baseline,.70,1.65);
+      const forward=Math.abs(uniforms.offset.value.dot(v.forward));
+      const lateral=Math.sqrt(Math.max(0,baseline*baseline-forward*forward));
+      // Long forward baselines expose space behind chairs. Keep the multi-view
+      // result there, while a nearby sideways step can use the full source photo.
+      const disocclusion=THREE.MathUtils.smoothstep(forward,.55,1.)*
+        (1.-THREE.MathUtils.smoothstep(lateral,.15,.55));
+      drawHall(renderer,camera,best,along*onset*near*(1.-disocclusion));
+    }
   };
 }

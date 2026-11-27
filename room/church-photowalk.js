@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {hallGeometry} from './church-hall-proxy.js';
 import {makePhotoAnchor} from './church-photo-anchor.js';
 
 // Unproject a regular grid through the calibrated equidistant fisheye lens. The
@@ -87,7 +88,8 @@ function depthSurface(view,depthImage) {
     }
   }
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(positions,3));g.setIndex(indices);
-  return g;
+  const hall=view.position.z>4?hallGeometry(rgba,rays,w,h):null;
+  return {g,hall};
 }
 const slots=[0,1,2,3];
 const vertex=`
@@ -224,8 +226,9 @@ export class PhotoWalk {
     return this.inflight.get(view.id);
   }
   async loadBundle(view){
-    const [photo,depth]=await Promise.allSettled([this.loader.loadAsync('./walk-light/'+view.id+'.webp'),
-      this.loader.loadAsync('./walk-light/'+view.id+'.png')]);
+    const revision=view.id===199?'?v=landing2':'';
+    const [photo,depth]=await Promise.allSettled([this.loader.loadAsync('./walk-light/'+view.id+'.webp'+revision),
+      this.loader.loadAsync('./walk-light/'+view.id+'.png'+revision)]);
     if(photo.status==='rejected'||depth.status==='rejected'){
       if(photo.status==='fulfilled')photo.value.dispose();
       if(depth.status==='fulfilled')depth.value.dispose();
@@ -234,9 +237,10 @@ export class PhotoWalk {
     photo.value.flipY=false;photo.value.colorSpace=THREE.SRGBColorSpace;
     depth.value.flipY=false;depth.value.generateMipmaps=false;
     depth.value.minFilter=depth.value.magFilter=THREE.NearestFilter;
-    const mesh=new THREE.Mesh(depthSurface(view,depth.value.image),this.depthOnly);
+    const {g,hall}=depthSurface(view,depth.value.image);
+    const mesh=new THREE.Mesh(g,this.depthOnly);
     mesh.matrixAutoUpdate=false;mesh.matrix.copy(view.matrix);
-    const result={view,mesh,photo:photo.value,depth:depth.value};this.cache.set(view.id,result);return result;
+    const result={view,mesh,hall,photo:photo.value,depth:depth.value};this.cache.set(view.id,result);return result;
   }
   select(camera) {
     if(!this.enabled)return;
@@ -263,7 +267,7 @@ export class PhotoWalk {
       for(const [id,item] of this.cache){
         if(this.cache.size<=8)break;
         if(this.active.includes(item))continue;
-        item.mesh.geometry.dispose();item.photo.dispose();item.depth.dispose();this.cache.delete(id);
+        item.mesh.geometry.dispose();item.hall?.dispose();item.photo.dispose();item.depth.dispose();this.cache.delete(id);
       }
     });
   }

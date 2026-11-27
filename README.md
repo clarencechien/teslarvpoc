@@ -6,6 +6,26 @@
 
 進入後拖曳環顧，用方向鍵、WASD 或觸控方向鈕在拍攝走道附近移動。五個拍攝點可直接跳到大廳或樓梯。[石階仰視](https://clarencechien.github.io/teslarvpoc/christ-church/#stairs-up) 可從下方看窗邊平台。「全區剖視」可看兩個空間如何連通。桌機可用「滑鼠自由視角」轉頭，按 Esc 結束。勾選「疊加去人影、校色後的多視角實拍」可查看實拍細節。「對照原照」會打開鄰近拍攝點的原始魚眼視圖。
 
+### 石階第二站與大廳桌沿
+
+[直接進入石階第二站](https://clarencechien.github.io/teslarvpoc/christ-church/#landing-2) · [桌沿與地磚局部放大](https://clarencechien.github.io/teslarvpoc/christ-church/walk-light/detail-crops.webp) · [兩段漫遊前後對照](https://clarencechien.github.io/teslarvpoc/christ-church/walk-light/detail-pass.webp)
+
+石階第二站去人後，原本鞋子的位置留下兩個深色團塊。這次先從周圍可見的石面估計平台的斜度，再把照片 200 和 1182 投回同一平面。兩張照片從不同角度看到鞋子後面的地磚。程式以拍攝時的移動雷射排除被遮住的觀測，從原照兩側的石面估計亮度，把石紋接回平台，再修正 780 個有雙視角支持的錯誤深度格。這一步使用鄰近石面估計被遮住處的光影。[地磚修補程式](scripts/church_landing_floor.py)
+
+照片 1183 保留作複查。扣除緩慢變化的亮度後，比較它與漫遊貼圖在同一位置的石紋，在 26,888 個共同可見像素上，平均絕對灰階誤差從 10.15 降至 7.43。這個數字衡量地磚紋理與接縫。瀏覽器也依序走過全部 12 個石階站點。[量測與相機編號](room/site/christ-church/walk-light/landing-step.json)
+
+大廳近處的深色椅背容易在橫移時裂成小三角形。現在走在長桌旁時，程式把已去人、校色的同一張照片鋪在由局部深度支撐的連續表面上。相機越接近家具、橫移距離越小，這張照片的細節越能保留下來。第一輪把這個做法套到整張圖，遠窗與斜角燈具出現拉伸，發布版只在沿桌長觀看的近處家具使用。場景剖視和下載的 GLB 使用原本的掃描網格。[近景表面與混合程式](room/church-hall-proxy.js)
+
+另取六個大廳實拍位置，選擇沿桌長觀看、且與鄰近投影相機有橫向偏移的位置。相機位置與朝向相同時，整張畫面的灰階 SSIM 平均從 0.8598 到 0.8619，畫面下半部從 0.8452 到 0.8496。其中兩個視角的全圖分數提高、四個略降。原來十個預留視角的平均從 0.8563 到 0.8567。近處桌沿在橫移時連續許多，斜看的細燈柱仍可能變形。[逐張分數](room/christ-church-detail-views.csv) · [瀏覽器核對程式](scripts/check_church_detail_views.py)
+
+可從上一版重跑單一地磚修補。以下命令沿用下方列出的 Oxford 資料和 YOLOX 權重，將照片、距離圖與量測紀錄寫到新目錄。完整建置也會自動執行這一步。
+
+```sh
+git worktree add --detach /tmp/church-before-detail cf55bb5
+python scripts/church_landing_floor.py /tmp/oxford-spires \
+  /tmp/church-before-detail/room/site/christ-church /tmp/oxford-spires/yolox.onnx /tmp/church-floor-detail
+```
+
 ### 統一窗光、移除行人與實際漫遊複查
 
 [從窗前石階進入](https://clarencechien.github.io/teslarvpoc/christ-church/#photo-stairs) · [同一表面的光影對照圖](https://clarencechien.github.io/teslarvpoc/christ-church/walk-light/lighting-comparison.webp) · [三段實際行走的前後對照動畫](https://clarencechien.github.io/teslarvpoc/christ-church/walk-light/walk-comparison.webp)
@@ -14,9 +34,9 @@
 
 遇到行人時，先找其他時刻能看到背景的原照，再用雷射距離核對遮擋。人物周圍的暗影得有其他視角看到較亮的同一表面，才一併修補。整張照片修一次，再放大分區找小人影。相同的全圖與放大偵測從 81 張有反應降至 14 張；第二輪在 25 張照片接受了額外修補。另有 7 張照片修到與人物相連、且有跨視角證據的暗影。偵測數包含可能被辨識成人的壁畫或固定裝飾。桌面與手機模型各更新了 177 塊照片貼圖。漫遊依位置與方向從 202 張清理後的照片中選圖，同時最多疊四張。缺少佐證的背景會降低投影權重。大幅偏離採集路線時，仍能看到階緣破損與貼圖拉伸。原始魚眼照片可用「對照原照」查看。
 
-第三次檢查在石階第二站找到一個人像偵測器量不到的問題。第一輪去人後，鞋子旁的地板留下了矩形補丁。程式沿原人物框檢查亮度接縫，從最多 65 個鄰近視角選取能看見背景的照片，按表面距離重新投影，再以 GrabCut 縮小到人物輪廓，用 Poisson 融合接回原地板。發布資料共有 10 張照片接受這道修補。放大仍能看出鞋子原先遮住處的石紋較軟。[第二站實際畫面](https://clarencechien.github.io/teslarvpoc/christ-church/walk-light/landing-comparison.webp) · [OpenCV GrabCut](https://docs.opencv.org/4.x/d8/d83/tutorial_py_grabcut.html) · [OpenCV 無縫融合](https://docs.opencv.org/4.x/df/da0/group__photo__clone.html)
+第三次檢查在石階第二站找到一個人像偵測器量不到的問題。第一輪去人後，鞋子旁的地板留下了矩形補丁。程式沿原人物框檢查亮度接縫，從最多 65 個鄰近視角選取能看見背景的照片，按表面距離重新投影，再以 GrabCut 縮小到人物輪廓，用 Poisson 融合接回原地板。發布資料共有 10 張照片接受這道修補。當時放大仍能看出鞋子原先遮住處的石紋較軟。[第二站實際畫面](https://clarencechien.github.io/teslarvpoc/christ-church/walk-light/landing-comparison.webp) · [OpenCV GrabCut](https://docs.opencv.org/4.x/d8/d83/tutorial_py_grabcut.html) · [OpenCV 無縫融合](https://docs.opencv.org/4.x/df/da0/group__photo__clone.html)
 
-驗證程式在 Chromium 實際操作大廳長桌、樓梯平台、石階實拍三段路線，各走相同的按鍵序列，逐步截取六張畫面，並檢查原照與剖視切換。動畫並排顯示相同步伐的舊版與新版。另依序停在 12 個石階拍攝點，同一人物偵測器有反應的站點從 10 處降為 0 處。這只涵蓋當下相機朝向。第二站腳邊仍有局部暗痕。[12 站檢查](room/site/christ-church/walk-light/stairs-check.json)[逐步畫面檢查](room/site/christ-church/walk-light/route-check.json) · [行走驗證程式](scripts/review_church_walk.py)
+驗證程式在 Chromium 實際操作大廳長桌、樓梯平台、石階實拍三段路線，各走相同的按鍵序列，逐步截取六張畫面，並檢查原照與剖視切換。動畫並排顯示相同步伐的舊版與新版。另依序停在 12 個石階拍攝點，同一人物偵測器有反應的站點從 10 處降為 0 處。這只涵蓋當下相機朝向。當時第二站腳邊仍有局部暗痕。[12 站檢查](room/site/christ-church/walk-light/stairs-check.json)[逐步畫面檢查](room/site/christ-church/walk-light/route-check.json) · [行走驗證程式](scripts/review_church_walk.py)
 
 另用 10 張未參與貼圖、校色或漫遊投影的原照檢查相同視角，以 704 × 411 畫面扣除四周 5 像素計算灰階 SSIM。平均從 0.835 到 0.856，其中 6 個視角上升，4 個下降。含人的原照會把移除人物也計為差異。[逐張分數](room/christ-church-walk-views.csv)
 

@@ -333,6 +333,7 @@ async function start(){
   }
   current=views.find(v=>v.id===(location.hash==='#photo-stairs'||location.hash==='#stairs-up'||location.hash==='#game-stairs'?198:21));
   if(location.hash==='#rail-repair')railSideView();
+  else if(location.hash==='#landing-2')openPhotoStop(1);
   else if(location.hash==='#photo-stairs')openPhotoStop(0);
   else if(location.hash==='#game-stairs')enterGame();
   else activate('scan',()=>station(current));

@@ -667,6 +667,9 @@ def publishable_walk(data, source, detector, cache, output, chromium, font):
         shutil.copytree(source, staged, ignore=shutil.ignore_patterns("walk-light"))
         build(data, source, detector, ranges, staged / "walk-light", tiles, font)
         repair_atlases(data, source, tiles, staged)
+        from church_landing_floor import repair_landing
+
+        repair_landing(data, staged, detector, staged / "walk-light")
         templates = Path(__file__).resolve().parents[1] / "room/site/christ-church"
         for name in ("index.html", "viewer.js", "viewer.js.LEGAL.txt"):
             shutil.copy2(templates / name, staged / name)
