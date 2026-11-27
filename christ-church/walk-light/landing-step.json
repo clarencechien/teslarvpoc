@@ -1,0 +1,18 @@
+{
+  "view": 199,
+  "donors": [
+    200,
+    1182
+  ],
+  "witness": 1183,
+  "plane": [
+    -4.964175190114681e-05,
+    0.008030332226425685,
+    -4.583051378411283
+  ],
+  "visibleHeightMedianErrorMetres": 0.006719618739082112,
+  "witnessPixels": 26888,
+  "beforeDetailMAE": 10.149993896484375,
+  "afterDetailMAE": 7.4282355308532715,
+  "depthCellsChanged": 780
+}
