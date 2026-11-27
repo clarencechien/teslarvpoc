@@ -673,6 +673,9 @@ def publishable_walk(data, source, detector, cache, output, chromium, font):
         templates = Path(__file__).resolve().parents[1] / "room/site/christ-church"
         for name in ("index.html", "viewer.js", "viewer.js.LEGAL.txt"):
             shutil.copy2(templates / name, staged / name)
+        # The published continuity comparison documents the transition from release 43310f2.
+        for name in ("continuity.webp", "continuity.json"):
+            shutil.copy2(templates / "walk-light" / name, staged / "walk-light" / name)
         review_directories(source, staged, detector, chromium, font)
         staged.rename(output)
 

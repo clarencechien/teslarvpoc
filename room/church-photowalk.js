@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import {hallGeometry} from './church-hall-proxy.js';
-import {makePhotoAnchor} from './church-photo-anchor.js';
+import {scanProjection} from './church-scan-projection.js';
+import {photoSurface} from './church-photo-surface.js';
 
 // Unproject a regular grid through the calibrated equidistant fisheye lens. The
 // lookup is shared by all photographs from a camera, while range changes per exposure.
@@ -26,188 +26,138 @@ function gridRays(view,width,height) {
   raysByLens.set(key,rays);return rays;
 }
 
-function depthSurface(view,depthImage) {
-  const canvas=document.createElement('canvas');
-  const w=canvas.width=depthImage.width,h=canvas.height=depthImage.height;
-  const ctx=canvas.getContext('2d',{willReadFrequently:true});
-  ctx.drawImage(depthImage,0,0);
-  const rgba=ctx.getImageData(0,0,w,h).data;
-  const rays=gridRays(view,w,h),positions=new Float32Array(rays.length),depth=new Float32Array(w*h);
-  for(let i=0;i<depth.length;i++){
-    depth[i]=(256*rgba[4*i]+rgba[4*i+1])*.001;
-    for(let j=0;j<3;j++)positions[3*i+j]=rays[3*i+j]*depth[i];
-  }
-  const indices=[];
-  function triangle(a,b,c){
-    const near=Math.min(depth[a],depth[b],depth[c]),far=Math.max(depth[a],depth[b],depth[c]);
-    if(near>.30 && far-near<.07+.029*near)indices.push(a,b,c);
-  }
-  // Use two-pixel cells on continuous walls and one-pixel cells on depth edges.
-  // If a neighbour subdivides an edge, both cells must use its midpoint.
-  const cols=Math.floor((w-1)/2),rows=Math.floor((h-1)/2);
-  const fine=new Uint8Array(cols*rows);
-  for(let y=0;y<rows;y++){
-    for(let x=0;x<cols;x++){
-      const corner=2*(y*w+x),center=depth[corner+w+1];
-      for(let dy=0;dy<=2;dy++){
-        for(let dx=0;dx<=2;dx++){
-          if(Math.abs(depth[corner+dy*w+dx]-center)>.045+.018*center)fine[y*cols+x]=1;
-        }
-      }
-    }
-  }
-  for(let y=0;y<rows;y++){
-    for(let x=0;x<cols;x++){
-      const i=y*cols+x,tl=2*(y*w+x),tr=tl+2,bl=tl+2*w,br=bl+2,center=tl+w+1;
-      if(fine[i]){
-        for(let dy=0;dy<2;dy++){
-          for(let dx=0;dx<2;dx++){
-            const p=tl+w*dy+dx;
-            triangle(p,p+w,p+1);
-            triangle(p+1,p+w,p+w+1);
-          }
-        }
-        continue;
-      }
-      const top=y>0&&fine[i-cols],left=x>0&&fine[i-1];
-      const bottom=y+1<rows&&fine[i+cols],right=x+1<cols&&fine[i+1];
-      if(!(top||left||bottom||right)){
-        triangle(tl,bl,tr);
-        triangle(tr,bl,br);
-        continue;
-      }
-      const rim=[tl];
-      if(left)rim.push(tl+w);
-      rim.push(bl);
-      if(bottom)rim.push(bl+1);
-      rim.push(br);
-      if(right)rim.push(tr+w);
-      rim.push(tr);
-      if(top)rim.push(tl+1);
-      for(let k=0;k<rim.length;k++)triangle(center,rim[k],rim[(k+1)%rim.length]);
-    }
-  }
-  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(positions,3));g.setIndex(indices);
-  const hall=view.position.z>4?hallGeometry(rgba,rays,w,h):null;
-  return {g,hall};
-}
-const slots=[0,1,2,3];
-const vertex=`
-  varying vec3 world;
-  void main(){
-    vec4 p=modelMatrix*vec4(position,1.);
-    world=p.xyz;gl_Position=projectionMatrix*viewMatrix*p;
-    // Prefer the fitted scan when the two measured surfaces agree to a few centimetres.
-    gl_Position.z+=-projectionMatrix[3][2]*.075/max(.001,gl_Position.w+.075);
-  }`;
+const WANTED = 4;
+const LAYERS = WANTED + 1; // A spare layer lets a source enter before the previous one leaves.
+const ids = Array.from({length: LAYERS}, (_, i) => i);
 
-const photoUniforms={};
-function projectionCode(){
-  const declarations=[];
-  for(const i of slots){
-    for(const [name,value] of Object.entries({photo:null,rangeMap:null,source:new THREE.Matrix4(),
-      lens:new THREE.Vector4(),distortion:new THREE.Vector4(),center:new THREE.Vector3()})){
-      photoUniforms[name+i]={value};
-    }
-    declarations.push(`uniform sampler2D photo${i},rangeMap${i}; uniform mat4 source${i};
-      uniform vec3 center${i}; uniform vec4 lens${i},distortion${i};`);
-  }
-  return `
-    ${declarations.join('\n')}
-    float support(vec3 packedRange,float distanceToSource){
-      float d=dot(floor(packedRange.rg*255.+.5),vec2(256.,1.))*.001;
-      return packedRange.b*(1.-smoothstep(.085+.012*d,.22+.026*d,abs(d-distanceToSource)));
-    }
-    void observation(vec3 world,sampler2D photo,sampler2D ranges,mat4 src,vec4 lens,vec4 k,vec3 center,
-                     out vec3 rgb,out vec3 low,out float weight){
-      rgb=low=vec3(0.);weight=0.;
-      vec3 p=(src*vec4(world,1.)).xyz;
-      if(p.z>=-.10)return;
-      float r=length(p.xy),theta=atan(r,-p.z),s=theta*theta;
-      float radial=theta*(1.+s*(k.x+s*(k.y+s*(k.z+s*k.w))));
-      vec2 uv=(vec2(p.x,-p.y)*radial/max(r,.00001)*lens.xy+lens.zw+.5)/vec2(1440.,1080.);
-      float edge=min(min(uv.x,1.-uv.x),min(uv.y,1.-uv.y));
-      if(edge<=0.)return;
-      vec3 packedRange=texture2D(ranges,uv).rgb;
-      vec2 pad=1.5/vec2(360.,270.);
-      float distanceToSource=length(p);
-      float vis=.4*support(packedRange,distanceToSource);
-      vis+=.15*(support(texture2D(ranges,uv+vec2(pad.x,0.)).rgb,distanceToSource)+
-                 support(texture2D(ranges,uv-vec2(pad.x,0.)).rgb,distanceToSource)+
-                 support(texture2D(ranges,uv+vec2(0.,pad.y)).rgb,distanceToSource)+
-                 support(texture2D(ranges,uv-vec2(0.,pad.y)).rgb,distanceToSource));
-      float baseline=distance(center,cameraPosition);
-      vec3 ray=normalize(world-center),targetRay=normalize(world-cameraPosition);
-      float parallax=length(ray-targetRay);
-      weight=vis*smoothstep(0.,.045,edge)*
-        (1.-smoothstep(2.2,4.2,baseline))/(.32+.60*baseline*baseline+15.*parallax*parallax);
-      rgb=texture2D(photo,uv).rgb;
-      low=textureLod(photo,uv,2.2).rgb;
-    }
-    vec4 photographicColor(vec3 world){
-      vec3 rgb[4],low[4];float w[4];
-      ${slots.map(i=>`observation(world,photo${i},rangeMap${i},source${i},lens${i},distortion${i},center${i},rgb[${i}],low[${i}],w[${i}]);`).join('\n')}
-      // Choose a sharp observation with support from other sources. Exposure
-      // and alignment differences should not superimpose two rail or window edges.
-      int best=0;float peak=0.;
-      for(int i=0;i<4;i++){
-        float agree=.30;
-        for(int j=0;j<4;j++){
-          if(i!=j)agree+=min(w[j],1.)/(1.+18.*length(low[i]-low[j]));
-        }
-        float score=w[i]*agree;
-        if(score>peak){peak=score;best=i;}
-      }
-      float sum=0.;vec3 color=vec3(0.);
-      for(int i=0;i<4;i++){
-        float delta=length(low[i]-low[best]);
-        float weight=w[i]/(1.+120.*delta*delta);
-        sum+=weight;color+=weight*rgb[i];
-      }
-      return vec4(max(vec3(0.),color/max(sum,.00001)),smoothstep(.03,.36,sum));
-    }`;
-}
-const photoCode=projectionCode();
-function photographicMaterial(){
-  const uniforms={...photoUniforms,base:{value:null},zMap:{value:null},
-    invProjection:{value:new THREE.Matrix4()},viewPose:{value:new THREE.Matrix4()}};
-  return new THREE.ShaderMaterial({uniforms,depthTest:false,depthWrite:false,
-    vertexShader:'varying vec2 screen;void main(){screen=position.xy;gl_Position=vec4(position.xy,0.,1.);}',
-    fragmentShader:`varying vec2 screen;
-      uniform sampler2D base,zMap;
-      uniform mat4 invProjection,viewPose;
-      ${photoCode}
-      void main(){
-        vec2 uv=screen*.5+.5;
-        float z=texture2D(zMap,uv).r;
-        vec3 color=texture2D(base,uv).rgb;
-        if(z<.999999){
-          vec4 eye=invProjection*vec4(screen,2.*z-1.,1.);
-          vec4 photo=photographicColor((viewPose*vec4(eye.xyz/eye.w,1.)).xyz);
-          color=mix(color,photo.rgb,photo.a);
-        }
-        gl_FragColor=vec4(color,1.);
+function makeLayerMaterial() {
+  return new THREE.ShaderMaterial({
+    uniforms: {photo: {value: null}, sourceCenter: {value: new THREE.Vector3()}},
+    vertexShader: `
+      attribute float certainty;
+      varying vec2 st;
+      varying vec3 world;
+      varying float support;
+      void main() {
+        st = uv; support = certainty;
+        world = (modelMatrix * vec4(position, 1.)).xyz;
+        gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.);
+      }`,
+    fragmentShader: `
+      uniform sampler2D photo;
+      uniform vec3 sourceCenter;
+      varying vec2 st;
+      varying vec3 world;
+      varying float support;
+      void main() {
+        float border = min(min(st.x, 1.-st.x), min(st.y, 1.-st.y));
+        vec3 sourceRay = normalize(world-sourceCenter), targetRay = normalize(world-cameraPosition);
+        float parallax = length(sourceRay-targetRay);
+        float reliability = smoothstep(.035,.64,support) * smoothstep(.002,.049,border)
+                          * (1.-smoothstep(.23,.75,parallax));
+        // Reject elongated projected texels where a foreground silhouette bridges a background gap.
+        vec2 sourcePixel = st * vec2(1440.,1080.);
+        vec2 dx=dFdx(sourcePixel), dy=dFdy(sourcePixel);
+        float trace=dot(dx,dx)+dot(dy,dy), area=abs(dx.x*dy.y-dx.y*dy.x);
+        float anisotropy=(trace+sqrt(max(0.,trace*trace-4.*area*area)))/max(.00001,2.*area);
+        float drop=cameraPosition.y-world.y;
+        float furniture=smoothstep(3.,6.,world.z)*smoothstep(.2,.65,drop)*(1.-smoothstep(1.9,2.6,drop))
+                       *(1.-smoothstep(6.,11.,distance(cameraPosition,world)));
+        reliability *= 1.-smoothstep(2.2,5.0,anisotropy)*(1.-.55*furniture);
+        if(reliability < .008) discard;
+        gl_FragColor = vec4(texture2D(photo,st).rgb, reliability);
         #include <colorspace_fragment>
-      }`});
+      }`
+  });
+}
+
+function compositor() {
+  const uniforms = {worldFromClip:{value:new THREE.Matrix4()}, scanDepth:{value:null}, scanColor:{value:null}, clip: {value: new THREE.Vector2()}, weights: {value: new Float32Array(LAYERS)},
+    fades: {value: new Float32Array(LAYERS)}, ramp:{value:new Float32Array(LAYERS)}};
+  for (const i of ids) {
+    uniforms['layer'+i] = {value: null};
+    uniforms['depth'+i] = {value: null};
+  }
+  return new THREE.ShaderMaterial({
+    uniforms, transparent: true, depthTest: false, depthWrite: false,
+    vertexShader: 'varying vec2 st;void main(){st=position.xy*.5+.5;gl_Position=vec4(position.xy,0.,1.);}',
+    fragmentShader: `
+      varying vec2 st;uniform vec2 clip;
+      uniform mat4 worldFromClip;uniform sampler2D scanDepth,scanColor;uniform float weights[${LAYERS}], fades[${LAYERS}],ramp[${LAYERS}];
+      ${ids.map(i=>'uniform sampler2D layer'+i+',depth'+i+';').join('\n')}
+      float metres(float z){return clip.x*clip.y/(clip.y-z*(clip.y-clip.x));}
+      void main(){
+        vec4 pixels[${LAYERS}];float d[${LAYERS}];
+        ${ids.map(i=>`pixels[${i}]=texture2D(layer${i},st);pixels[${i}].a*=fades[${i}];
+                        d[${i}]=metres(texture2D(depth${i},st).r);`).join('\n')}
+        float raw=texture2D(scanDepth,st).r, measured=metres(raw);
+        vec4 p=worldFromClip*vec4(st*2.-1.,raw*2.-1.,1.);
+        vec3 world=p.xyz/p.w;
+        float drop=cameraPosition.y-world.y;
+        float furniture=smoothstep(3.,6.,world.z)*smoothstep(.2,.65,drop)*(1.-smoothstep(1.9,2.6,drop))
+                       *(1.-smoothstep(6.,11.,distance(cameraPosition,world)));
+        vec3 sum=vec3(0.);float total=0., coverage=0., rawWeight[${LAYERS}];
+        for(int i=0;i<${LAYERS};i++){
+          float delta=abs(d[i]-measured);
+          float agreement=1.-smoothstep(.25+.045*measured,.70+.13*measured,delta);
+          float visible=pixels[i].a * (measured>clip.y*.98 ? 1. : mix(.12+.82*furniture,1.,agreement));
+          for(int j=0;j<${LAYERS};j++){
+            // A fading or marginal observation must not suddenly occlude a wall.
+            float front=smoothstep(.09+.015*d[i],.35+.04*d[i],d[i]-d[j]);
+            float authority=weights[j]/max(.001,weights[j]+.30*weights[i]);
+            visible*=1.-front*pixels[j].a*authority;
+          }
+          float w=weights[i]*visible;
+          rawWeight[i]=w;total+=w;coverage+=visible;
+        }
+        float weighted=0.;
+        for(int i=0;i<${LAYERS};i++){
+          float other=max(0.,total-rawWeight[i]);
+          float w=rawWeight[i];
+          if(ramp[i]<.999 && other>.0001)w=min(w,other*ramp[i]/max(.001,1.-ramp[i]));
+          sum+=w*pixels[i].rgb;weighted+=w;
+        }
+        vec4 base=texture2D(scanColor,st);
+        // Give a well-supported, sharp scan surface precedence at grazing angles
+        // and distant masonry; keep nearby photo geometry through missing furniture.
+        float stable=base.a*(1.-.95*furniture)*mix(.22,.90,smoothstep(2.5,8.,measured));
+        gl_FragColor=vec4(mix(base.rgb,sum/max(.00001,weighted),(1.-stable)*smoothstep(.015,.93,coverage)),1.);
+        #include <colorspace_fragment>
+      }`
+  });
+}
+
+function makeTarget() {
+  const target = new THREE.WebGLRenderTarget(1, 1, {
+    minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter,
+    depthTexture: new THREE.DepthTexture(1, 1, THREE.UnsignedIntType)
+  });
+  target.texture.colorSpace = THREE.SRGBColorSpace;
+  return target;
 }
 
 export class PhotoWalk {
-  constructor(views,invalidate){
-    this.inflight=new Map();
-    this.drawAnchor=makePhotoAnchor();
-    this.views=views;this.invalidate=invalidate;
-    this.scene=new THREE.Scene();
-    this.material=photographicMaterial();
-    this.screen=new THREE.Scene();
-    const quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),this.material);
-    quad.frustumCulled=false;this.screen.add(quad);
-    this.size=new THREE.Vector2();
-    this.target=new THREE.WebGLRenderTarget(1,1,{depthTexture:new THREE.DepthTexture(1,1,THREE.UnsignedIntType)});
-    this.target.texture.colorSpace=THREE.SRGBColorSpace;
-    this.depthOnly=new THREE.ShaderMaterial({vertexShader:vertex,fragmentShader:'void main(){gl_FragColor=vec4(0.);}',
-      side:THREE.DoubleSide,colorWrite:false,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:2});
-    this.cache=new Map();this.active=[];this.loader=new THREE.TextureLoader();
-    this.direction=new THREE.Vector3();this.enabled=false;this.loading=false;this.retryAt=0;
+  constructor(views,invalidate) {
+    this.views=views; this.invalidate=invalidate;
+    this.cache=new Map(); this.wanted=[]; this.retryAt=0; this.loading=false; this.enabled=false;
+    this.layers=ids.map(()=>({item:null, fade:0, target:makeTarget()}));
+    this.scanTarget=makeTarget();
+    this.projected=new THREE.WebGLRenderTarget(1,1,{depthBuffer:false});
+    this.projected.texture.colorSpace=THREE.SRGBColorSpace;
+    this.onScan=scanProjection(ids);
+    this.layerScene=new THREE.Scene(); this.surfaceMaterial=makeLayerMaterial();
+    this.surface=new THREE.Mesh(undefined,this.surfaceMaterial);
+    this.surface.matrixAutoUpdate=false; this.surface.frustumCulled=false; this.layerScene.add(this.surface);
+    this.screen=new THREE.Scene(); this.blend=compositor();
+    const quad=this.quad=new THREE.Mesh(new THREE.PlaneGeometry(2,2),this.blend);
+    quad.frustumCulled=false; this.screen.add(quad);
+    this.loader=new THREE.TextureLoader(); this.direction=new THREE.Vector3();
+    this.size=new THREE.Vector2(); this.clearColor=new THREE.Color(); this.lastFrame=0;
+  }
+  get ready() {return this.layers.some(layer=>layer.item!==null);}
+  resetStation() {
+    this.wanted=[];
+    for(const layer of this.layers){layer.item=null;layer.fade=0;}
   }
   static async create(invalidate) {
     const response=await fetch('./walk-light/views.json');
@@ -215,74 +165,139 @@ export class PhotoWalk {
     const sources=await response.json();
     for(const view of sources){
       view.matrix=new THREE.Matrix4().set(...view.pose.flat());
+      view.inverse=view.matrix.clone().invert();
       view.position=new THREE.Vector3().setFromMatrixPosition(view.matrix);
       view.forward=new THREE.Vector3(0,0,-1).transformDirection(view.matrix);
     }
     return new PhotoWalk(sources,invalidate);
   }
-  bundle(view){
-    if(this.cache.has(view.id))return Promise.resolve(this.cache.get(view.id));
-    if(!this.inflight.has(view.id))this.inflight.set(view.id,this.loadBundle(view).finally(()=>this.inflight.delete(view.id)));
-    return this.inflight.get(view.id);
-  }
-  async loadBundle(view){
+  async load(view) {
     const revision=view.id===199?'?v=landing2':'';
-    const [photo,depth]=await Promise.allSettled([this.loader.loadAsync('./walk-light/'+view.id+'.webp'+revision),
-      this.loader.loadAsync('./walk-light/'+view.id+'.png'+revision)]);
-    if(photo.status==='rejected'||depth.status==='rejected'){
+    const [photo,range]=await Promise.allSettled(['webp','png'].map(ext=>
+      this.loader.loadAsync('./walk-light/'+view.id+'.'+ext+revision)));
+    if(photo.status==='rejected'||range.status==='rejected'){
       if(photo.status==='fulfilled')photo.value.dispose();
-      if(depth.status==='fulfilled')depth.value.dispose();
+      if(range.status==='fulfilled')range.value.dispose();
       throw Error('實拍圖層讀取失敗');
     }
-    photo.value.flipY=false;photo.value.colorSpace=THREE.SRGBColorSpace;
-    depth.value.flipY=false;depth.value.generateMipmaps=false;
-    depth.value.minFilter=depth.value.magFilter=THREE.NearestFilter;
-    const {g,hall}=depthSurface(view,depth.value.image);
-    const mesh=new THREE.Mesh(g,this.depthOnly);
-    mesh.matrixAutoUpdate=false;mesh.matrix.copy(view.matrix);
-    const result={view,mesh,hall,photo:photo.value,depth:depth.value};this.cache.set(view.id,result);return result;
+    const texture=photo.value, image=range.value.image;
+    try {
+      const canvas=document.createElement('canvas');
+      const w=canvas.width=image.width, h=canvas.height=image.height;
+      const ctx=canvas.getContext('2d',{willReadFrequently:true});
+      ctx.drawImage(image,0,0);
+      const geometry=photoSurface(ctx.getImageData(0,0,w,h).data,gridRays(view,w,h),w,h);
+      texture.flipY=false; texture.colorSpace=THREE.SRGBColorSpace;
+      const depth=range.value;
+      depth.flipY=false;depth.generateMipmaps=false;depth.minFilter=depth.magFilter=THREE.NearestFilter;
+      this.cache.set(view.id,{view,geometry,texture,depth});
+    } catch(error) {texture.dispose();range.value.dispose();throw error;}
   }
   select(camera) {
     if(!this.enabled)return;
-    if(this.loading||performance.now()<this.retryAt)return;
     const forward=camera.getWorldDirection(this.direction);
     const scored=this.views.map(view=>({view,score:camera.position.distanceToSquared(view.position)+
-      4.2*(1-forward.dot(view.forward))-(this.active.some(item=>item.view===view)?.08:0)})).sort((a,b)=>a.score-b.score);
-    const nearest=scored.slice(0,slots.length).map(entry=>entry.view).sort((a,b)=>a.id-b.id);
-    if(!nearest.length||nearest.every((v,i)=>v===this.active[i]?.view))return;
-    this.loading=true;
-    Promise.allSettled(nearest.map(v=>this.bundle(v))).then(results=>{
-      if(results.some(r=>r.status==='rejected')){this.retryAt=performance.now()+1800;return;}
-      this.active=results.map(r=>r.value);
-      this.scene.clear();
-      const u=this.material.uniforms;
-      this.active.forEach(({view,mesh,photo,depth},i)=>{
-        this.scene.add(mesh);u['photo'+i].value=photo;u['rangeMap'+i].value=depth;
-        u['source'+i].value.copy(view.matrix).invert();u['center'+i].value.copy(view.position);
-        u['lens'+i].value.fromArray(view.lens);u['distortion'+i].value.fromArray(view.distortion);
+      4.2*(1-forward.dot(view.forward))-(this.wanted.includes(view)?.14:0)}));
+    scored.sort((a,b)=>a.score-b.score);
+    this.wanted=scored.slice(0,WANTED).map(entry=>entry.view);
+    this.prepare();
+  }
+  prepare() {
+    if(!this.enabled)return;
+    const missing=this.wanted.filter(view=>!this.cache.has(view.id));
+    if(missing.length && !this.loading && performance.now()>=this.retryAt){
+      this.loading=true;
+      Promise.allSettled(missing.map(view=>this.load(view))).then(results=>{
+        this.loading=false;
+        if(results.some(r=>r.status==='rejected'))this.retryAt=performance.now()+1800;
+        this.prepare();this.trim();this.invalidate();
       });
-      this.invalidate();
-    }).finally(()=>{
-      this.loading=false;
-      for(const [id,item] of this.cache){
-        if(this.cache.size<=8)break;
-        if(this.active.includes(item))continue;
-        item.mesh.geometry.dispose();item.hall?.dispose();item.photo.dispose();item.depth.dispose();this.cache.delete(id);
+    }
+    // Commit against the current camera selection, not the selection that started a download.
+    if(!missing.length || (!this.ready && performance.now()<this.retryAt)){
+      const first=!this.ready;
+      for(const view of this.wanted){
+        const item=this.cache.get(view.id);
+        if(!item || this.layers.some(layer=>layer.item===item))continue;
+        const spare=this.layers.find(layer=>!layer.item);
+        if(!spare)break;
+        spare.item=item;spare.fade=first?1:0;
+        this.invalidate();
       }
-    });
+    }
+  }
+  trim() {
+    for(const [id,item] of this.cache){
+      if(this.cache.size<=10)break;
+      if(this.wanted.includes(item.view)||this.layers.some(layer=>layer.item===item))continue;
+      item.geometry.dispose();item.texture.dispose();item.depth.dispose();this.cache.delete(id);
+    }
   }
   render(renderer,camera,scan) {
-    // Shade the nearest supported surface once per output pixel, regardless of
-    // how many of the overlapping measured patches contribute to its depth.
+    const now=performance.now();
+    const step=Math.min(.042,Math.max(0,(now-this.lastFrame)/1000))/.40;
+    this.lastFrame=now;
+    const canRetire=this.wanted.every(view=>this.cache.has(view.id));
+    const waitingForSlot=this.wanted.some(view=>!this.layers.some(layer=>layer.item?.view===view));
+    const outgoing=this.layers.filter(layer=>layer.item&&!this.wanted.includes(layer.item.view))
+      .sort((a,b)=>a.fade-b.fade || camera.position.distanceToSquared(b.item.view.position)-camera.position.distanceToSquared(a.item.view.position));
+    let changing=false;
+    for(const layer of this.layers){
+      if(!layer.item)continue;
+      const wanted=this.wanted.includes(layer.item.view);
+      const retire=canRetire && (!waitingForSlot || layer===outgoing[0]);
+      const goal=wanted?1:retire?0:layer.fade;
+      if(layer.fade!==goal){
+        layer.fade=THREE.MathUtils.clamp(goal>layer.fade?layer.fade+step:layer.fade-step,0,1);
+        if(!layer.fade&&!goal)layer.item=null;
+        changing=true;
+      }
+    }
+    if(changing){this.prepare();this.trim();this.invalidate();}
     renderer.getDrawingBufferSize(this.size);
-    this.target.setSize(this.size.x,this.size.y);
-    renderer.setRenderTarget(this.target);renderer.render(scan,camera);
-    renderer.autoClear=false;renderer.render(this.scene,camera);
-    renderer.setRenderTarget(null);
-    const u=this.material.uniforms;
-    u.base.value=this.target.texture;u.zMap.value=this.target.depthTexture;
-    u.invProjection.value.copy(camera.projectionMatrixInverse);u.viewPose.value.copy(camera.matrixWorld);
-    renderer.render(this.screen,camera);this.drawAnchor(renderer,camera,this.active);
-    renderer.autoClear=true;
+    const scale=Math.min(1,Math.sqrt(1800000/(this.size.x*this.size.y)));
+    const w=Math.max(1,Math.round(this.size.x*scale)),h=Math.max(1,Math.round(this.size.y*scale));
+    this.scanTarget.setSize(this.size.x,this.size.y);
+    renderer.setRenderTarget(this.scanTarget);renderer.render(scan,camera);
+    this.blend.uniforms.scanDepth.value=this.scanTarget.depthTexture;
+    const scanU=this.onScan.uniforms;
+    scanU.zMap.value=this.scanTarget.depthTexture;scanU.base.value=this.scanTarget.texture;
+    scanU.eye.value.multiplyMatrices(camera.matrixWorld,camera.projectionMatrixInverse);
+    this.blend.uniforms.worldFromClip.value.copy(scanU.eye.value);
+    const oldAlpha=renderer.getClearAlpha();renderer.getClearColor(this.clearColor);
+    renderer.setClearColor(0,0);
+    const u=this.blend.uniforms;
+    camera.getWorldDirection(this.direction);u.clip.value.set(camera.near,camera.far);
+    for(const i of ids){
+      const layer=this.layers[i],item=layer.item;
+      u.weights.value[i]=0;u.fades.value[i]=0;scanU.fades.value[i]=0;
+      if(!item || layer.fade<=0)continue;
+      const v=item.view,distance=camera.position.distanceTo(v.position);
+      const facing=this.direction.dot(v.forward);
+      const supported=(1-THREE.MathUtils.smoothstep(distance,3.0,6.5))*
+        THREE.MathUtils.smoothstep(facing,-.65,.05);
+      if(supported<.001)continue;
+      // Ease both endpoints. A nearby view can outweigh a distant one by two
+      // orders of magnitude, so a linear first step still looks like a cut.
+      u.ramp.value[i]=THREE.MathUtils.smootherstep(layer.fade,0,1);
+      const presence=u.ramp.value[i]*supported;
+      scanU.fades.value[i]=presence;
+      scanU['rgb'+i].value=item.texture;scanU['rangeMap'+i].value=item.depth;
+      scanU['pose'+i].value.copy(v.inverse);scanU['lens'+i].value.fromArray(v.lens);
+      scanU['distort'+i].value.fromArray(v.distortion);
+      layer.target.setSize(w,h);renderer.setRenderTarget(layer.target);
+      this.surface.geometry=item.geometry;this.surface.matrix.copy(v.matrix);
+      this.surface.matrixWorldNeedsUpdate=true;
+      this.surfaceMaterial.uniforms.photo.value=item.texture;this.surfaceMaterial.uniforms.sourceCenter.value.copy(v.position);
+      renderer.render(this.layerScene,camera);
+      u['layer'+i].value=layer.target.texture;u['depth'+i].value=layer.target.depthTexture;
+      u.weights.value[i]=Math.pow((.34+.66*Math.max(0,facing))/(.075+distance*distance),1.45);
+      u.fades.value[i]=presence;
+    }
+    this.projected.setSize(this.size.x,this.size.y);renderer.setRenderTarget(this.projected);
+    this.quad.material=this.onScan;renderer.render(this.screen,camera);
+    this.quad.material=this.blend;u.scanColor.value=this.projected.texture;
+    renderer.setRenderTarget(null);renderer.setClearColor(this.clearColor,oldAlpha);
+    renderer.autoClear=false;renderer.render(this.screen,camera);renderer.autoClear=true;
   }
 }

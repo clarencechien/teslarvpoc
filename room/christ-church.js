@@ -18,7 +18,7 @@ const cut = new THREE.Plane(new THREE.Vector3(0,-1,0), 2.8);
 const overviewLift={value:0};
 let renderer, controls, views, grid, current, model, mode='walk', dirty=true, ready=false;
 let targetEyeHeight=null, lastTime=0, lastSelection=0, drag, benchmark;
-let photoWalk, photoWalkLoad, photoWalkRetry=0;
+let photoWalk, photoWalkLoad, photoWalkRetry=0, awaitingStation=false;
 let gameScene, scanLoad, gameLoad, action=0, photoReturn;
 const strolling=()=>mode==='walk'||mode==='game';
 const photoStops=[197,199,200,201,202,204,205,206,207,208,209,210];
@@ -31,24 +31,29 @@ function addOverviewLight(material){
   };
 }
 
+function finishStation(){
+  awaitingStation=false;$('photo-loading').hidden=true;dirty=true;
+}
+
 function selectPhotoWalk(){
   const requested=mode==='walk' && $('detail').checked;
   if(photoWalk)photoWalk.enabled=requested;
-  if(!requested){canvas.dataset.photowalk='off';return;}
+  if(!requested){if(awaitingStation)finishStation();canvas.dataset.photowalk='off';return;}
   if(!photoWalk){
     if(!photoWalkLoad && performance.now()>=photoWalkRetry){
       photoWalkLoad=PhotoWalk.create(()=>{dirty=true;}).then(walk=>{
         photoWalk=walk;selectPhotoWalk();dirty=true;
-      }).catch(()=>{photoWalkRetry=performance.now()+3000;}).finally(()=>{photoWalkLoad=null;});
+      }).catch(()=>{photoWalkRetry=performance.now()+3000;finishStation();}).finally(()=>{photoWalkLoad=null;});
     }
     canvas.dataset.photowalk='loading';return;
   }
   photoWalk.select(camera);
-  canvas.dataset.photowalk=photoWalk.active.length?'ready':'loading';
+  canvas.dataset.photowalk=photoWalk.ready?'ready':photoWalk.retryAt>performance.now()?'unavailable':'loading';
+  if(awaitingStation && (photoWalk.ready || photoWalk.retryAt>performance.now()))finishStation();
 }
 
 function setMode(next) {
-  mode=next;targetEyeHeight=null;
+  finishStation();mode=next;targetEyeHeight=null;
   if(photoWalk)photoWalk.enabled=false;
   canvas.dataset.photowalk='off';
   benchmark=null;
@@ -72,6 +77,9 @@ function setMode(next) {
 
 function positionAt(view,lookUp=false) {
   current=view;targetEyeHeight=null;
+  if(mode==='walk' && $('detail').checked){
+    photoWalk?.resetStation();awaitingStation=true;$('photo-loading').hidden=false;
+  }
   camera.position.copy(view.position);
   turn.setFromRotationMatrix(view.matrix,'YXZ');turn.z=0;
   if(view.id===198||lookUp) turn.x+=.24;
@@ -158,11 +166,11 @@ function step(time){
     dirty=true;
   }
   if(time-lastSelection>140){selectPhotoWalk();lastSelection=time;}
-  if(dirty&&mode!=='compare'){
-    if(mode==='walk'&&photoWalk?.enabled&&photoWalk.active.length){
+  if(dirty&&!awaitingStation&&mode!=='compare'){
+    dirty=false;
+    if(mode==='walk'&&photoWalk?.enabled&&photoWalk.ready){
       photoWalk.render(renderer,camera,scene);
     }else renderer.render(mode==='game'?gameScene:scene,camera);
-    dirty=false;
   }
 }
 
@@ -276,22 +284,23 @@ async function start(){
     if(!ready)return;
     ++action;$('loading').hidden=true;
     if(mode==='compare'){
-      if(photoReturn==='game'){
-        setMode('game');$('caption').textContent='遊戲重繪 · 石階';
-      }else if(photoReturn==='walk'&&routeOpen){
-        setMode('walk');$('caption').textContent='實拍路線';selectPhotoWalk();
-      }else station(current);
+      setMode(photoReturn.mode);
+      $('caption').textContent=photoReturn.caption;
+      $('help').textContent=photoReturn.help;
+      if(photoReturn.mode==='walk')selectPhotoWalk();
+      canvas.focus({preventScroll:true});
       return;
     }
-    photoReturn=mode;
+    photoReturn={mode,caption:$('caption').textContent,help:$('help').textContent};
+    let referenceView=current;
     if(strolling()){
       const direction=camera.getWorldDirection(tmp);
       const score=v=>v.position.distanceToSquared(camera.position)+4.2*(1-direction.dot(v.forward));
-      current=views.reduce((a,b)=>score(b)<score(a)?b:a);
+      referenceView=views.reduce((a,b)=>score(b)<score(a)?b:a);
     }
-    setMode('compare');highlight(current);
-    $('reference').src='photo-'+current.id+'.webp';
-    $('caption').textContent=(current.name||'鄰近拍攝點')+' · 原照';
+    setMode('compare');
+    $('reference').src='photo-'+referenceView.id+'.webp';
+    $('caption').textContent=(referenceView.name||'鄰近拍攝點')+' · 原照';
   };
   $('detail').onchange=()=>{selectPhotoWalk();dirty=true;};
   $('bench').onclick=()=>{benchmark={start:performance.now(),last:0,frames:[]};$('bench').disabled=true;$('help').textContent='正在轉動視角量測幀率…';};

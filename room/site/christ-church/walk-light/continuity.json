@@ -1,0 +1,67 @@
+{
+  "hall": {
+    "beforeStoppedMeanAbsRGB": 0.0,
+    "afterStoppedMeanAbsRGB": 0.0,
+    "before": {
+      "framePairs": 26,
+      "meanFractionResidualOver12": 0.09948,
+      "meanFlowOverlap": 0.69266
+    },
+    "after": {
+      "framePairs": 26,
+      "meanFractionResidualOver12": 0.08919,
+      "meanFlowOverlap": 0.72767
+    }
+  },
+  "landing": {
+    "beforeStoppedMeanAbsRGB": 0.0,
+    "afterStoppedMeanAbsRGB": 0.0,
+    "before": {
+      "framePairs": 21,
+      "meanFractionResidualOver12": 0.22379,
+      "meanFlowOverlap": 0.54117
+    },
+    "after": {
+      "framePairs": 21,
+      "meanFractionResidualOver12": 0.2007,
+      "meanFlowOverlap": 0.54987
+    }
+  },
+  "fixedPoseHandoff": {
+    "before": {
+      "delayedRequests": 2,
+      "validSamples": 39,
+      "peakMeanAbsRGB": 3.834,
+      "changingSamples": 2,
+      "changes": [
+        3.834,
+        0.279
+      ]
+    },
+    "after": {
+      "delayedRequests": 2,
+      "validSamples": 40,
+      "peakMeanAbsRGB": 1.028,
+      "changingSamples": 11,
+      "changes": [
+        0.082,
+        0.441,
+        0.859,
+        1.028,
+        0.958,
+        0.917,
+        0.754,
+        0.439,
+        0.029,
+        0.018,
+        0.036,
+        0.05,
+        0.055,
+        0.052,
+        0.04,
+        0.023,
+        0.008
+      ]
+    }
+  }
+}

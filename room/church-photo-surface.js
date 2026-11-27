@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 
-// Render a single cleaned photograph on a continuous local depth surface.
-// This preserves the edges of chairs and reflections between nearby capture poses.
-export function hallGeometry(ranges, rays, width, height) {
+// Lift each calibrated photograph onto a continuous local depth surface.
+// The small surface grid is shared by movement, station stops and turns.
+export function photoSurface(ranges, rays, width, height) {
   const step=3, cols=Math.ceil(width/step), rows=Math.ceil(height/step);
   const samples=new Float32Array(cols*rows);
   const confidence=new Float32Array(samples.length);
@@ -67,34 +67,4 @@ export function hallGeometry(ranges, rays, width, height) {
   g.setAttribute('uv',new THREE.BufferAttribute(uv,2));
   g.setAttribute('certainty',new THREE.BufferAttribute(confidence,1));g.setIndex(indices);
   return g;
-}
-
-export function makeHallProjection(){
-  const material=new THREE.ShaderMaterial({
-    uniforms:{photo:{value:null},opacity:{value:1}, eye:{value:new THREE.Vector3()}},
-    transparent:true,depthWrite:true,depthTest:true,side:THREE.FrontSide,
-    vertexShader:`attribute float certainty;varying vec2 st;varying float support;varying vec3 world;
-      void main(){st=uv;support=certainty;world=(modelMatrix*vec4(position,1.)).xyz;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}`,
-    fragmentShader:`uniform sampler2D photo;uniform float opacity;uniform vec3 eye;varying vec3 world;varying vec2 st;varying float support;
-      void main(){
-        float edge=min(min(st.x,1.-st.x),min(st.y,1.-st.y));
-        float furniture=smoothstep(.25,.60,eye.y-world.y)*(1.-smoothstep(1.9,2.5,eye.y-world.y));
-        float nearby=1.-smoothstep(6.,12.,distance(world,eye));
-        float alpha=opacity*furniture*nearby*smoothstep(.002,.045,edge)*smoothstep(.12,.76,support);
-        if(alpha<.01)discard;
-        gl_FragColor=vec4(texture2D(photo,st).rgb,alpha);
-        #include <colorspace_fragment>
-      }`
-  });
-  const scene=new THREE.Scene(),mesh=new THREE.Mesh(undefined,material);
-  mesh.matrixAutoUpdate=false;mesh.frustumCulled=false;scene.add(mesh);
-  return (renderer,camera,item,weight)=>{
-    if(!item.hall||weight<=0)return;
-    mesh.geometry=item.hall;
-    mesh.matrix.copy(item.view.matrix);mesh.matrixWorldNeedsUpdate=true;
-    material.uniforms.eye.value.copy(item.view.position);
-    material.uniforms.photo.value=item.photo;material.uniforms.opacity.value=weight;
-    renderer.clearDepth();
-    renderer.render(scene,camera);
-  };
 }
